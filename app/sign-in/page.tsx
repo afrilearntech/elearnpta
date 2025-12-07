@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 
 const roles = [
   {
@@ -19,6 +20,7 @@ const roles = [
 type RoleId = (typeof roles)[number]["id"];
 
 export default function SignInPage() {
+  const router = useRouter();
   const [selectedRole, setSelectedRole] = useState<RoleId>("parent");
   const [formData, setFormData] = useState({ identifier: "", password: "" });
   const [errors, setErrors] = useState<{ identifier?: string; password?: string }>({});
@@ -54,9 +56,21 @@ export default function SignInPage() {
 
     try {
       await new Promise((resolve) => setTimeout(resolve, 1000));
+      
+      const userData = {
+        name: formData.identifier.split("@")[0] || "Parent User",
+        role: selectedRole === "parent" ? "PARENT" : "TEACHER",
+        email: formData.identifier.includes("@") ? formData.identifier : `${formData.identifier}@example.com`,
+      };
+      
+      if (typeof window !== "undefined") {
+        localStorage.setItem("auth_token", "dummy_token_" + Date.now());
+        localStorage.setItem("user", JSON.stringify(userData));
+      }
+      
+      router.push("/dashboard");
     } catch (error) {
       console.error("Login error:", error);
-    } finally {
       setIsLoading(false);
     }
   };
