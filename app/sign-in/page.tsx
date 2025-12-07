@@ -68,7 +68,8 @@ export default function SignInPage() {
         localStorage.setItem("user", JSON.stringify(userData));
       }
       
-      router.push("/dashboard");
+      const redirectPath = selectedRole === "teacher" ? "/dashboard/teacher" : "/dashboard";
+      router.push(redirectPath);
     } catch (error) {
       console.error("Login error:", error);
       setIsLoading(false);

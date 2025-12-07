@@ -29,8 +29,8 @@ export default function DashboardLayout({ children, onLinkChild }: DashboardLayo
 
       try {
         const user = JSON.parse(userStr);
-        setUserName(user.name || "Parent");
-        setUserRole(user.role === "PARENT" ? "Parent" : "Parent");
+        setUserName(user.name || "User");
+        setUserRole(user.role === "PARENT" ? "Parent" : user.role === "TEACHER" ? "Teacher" : "User");
       } catch (e) {
         console.error("Error parsing user data:", e);
       }

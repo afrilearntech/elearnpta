@@ -11,7 +11,7 @@ type NavItem = {
   icon: string;
 };
 
-const navItems: NavItem[] = [
+const parentNavItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: "solar:widget-5-bold" },
   { href: "/dashboard/children", label: "My Children", icon: "solar:users-group-two-rounded-bold" },
   { href: "/dashboard/grades", label: "Grades", icon: "solar:diploma-verified-bold" },
@@ -20,8 +20,18 @@ const navItems: NavItem[] = [
   { href: "/dashboard/analytics", label: "Analytics", icon: "solar:chart-2-bold" },
 ];
 
+const teacherNavItems: NavItem[] = [
+  { href: "/dashboard/teacher", label: "Dashboard", icon: "solar:widget-5-bold" },
+  { href: "/dashboard/teacher/class", label: "My Class", icon: "solar:users-group-two-rounded-bold" },
+  { href: "/dashboard/teacher/grades", label: "Grades", icon: "solar:diploma-verified-bold" },
+  { href: "/dashboard/teacher/assessments", label: "Assessments", icon: "solar:document-text-bold" },
+  { href: "/dashboard/teacher/submissions", label: "Submissions", icon: "solar:file-check-bold" },
+  { href: "/dashboard/teacher/analytics", label: "Analytics", icon: "solar:chart-2-bold" },
+];
+
 function isActivePath(pathname: string, href: string) {
   if (href === "/dashboard") return pathname === "/dashboard" || pathname === "/";
+  if (href === "/dashboard/teacher") return pathname === "/dashboard/teacher";
   return pathname.startsWith(href);
 }
 
@@ -34,6 +44,8 @@ type SidebarProps = {
 
 export default function Sidebar({ mobileOpen = false, onClose, userName = "Parent", userRole = "Parent" }: SidebarProps) {
   const pathname = usePathname();
+  const isTeacher = userRole === "Teacher";
+  const navItems = isTeacher ? teacherNavItems : parentNavItems;
 
   return (
     <>
