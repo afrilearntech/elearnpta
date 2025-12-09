@@ -3,6 +3,8 @@
 import { FormEvent, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { loginParent, loginTeacher, ApiClientError } from "@/lib/api/auth";
+import { showSuccessToast, showErrorToast, formatErrorMessage } from "@/lib/toast";
 
 const roles = [
   {
@@ -23,7 +25,7 @@ export default function SignInPage() {
   const router = useRouter();
   const [selectedRole, setSelectedRole] = useState<RoleId>("parent");
   const [formData, setFormData] = useState({ identifier: "", password: "" });
-  const [errors, setErrors] = useState<{ identifier?: string; password?: string }>({});
+  const [errors, setErrors] = useState<{ identifier?: string; password?: string; general?: string }>({});
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -55,23 +57,72 @@ export default function SignInPage() {
     setErrors({});
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      
-      const userData = {
-        name: formData.identifier.split("@")[0] || "Parent User",
-        role: selectedRole === "parent" ? "PARENT" : "TEACHER",
-        email: formData.identifier.includes("@") ? formData.identifier : `${formData.identifier}@example.com`,
+      const credentials = {
+        identifier: formData.identifier.trim(),
+        password: formData.password,
       };
-      
-      if (typeof window !== "undefined") {
-        localStorage.setItem("auth_token", "dummy_token_" + Date.now());
-        localStorage.setItem("user", JSON.stringify(userData));
+
+      let response;
+      if (selectedRole === "parent") {
+        response = await loginParent(credentials);
+      } else {
+        response = await loginTeacher(credentials);
       }
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem("auth_token", response.token);
+        localStorage.setItem("user", JSON.stringify(response.user));
+      }
+
+      showSuccessToast(
+        `Welcome back, ${response.user.name}! Redirecting to your dashboard...`
+      );
       
       const redirectPath = selectedRole === "teacher" ? "/dashboard/teacher" : "/dashboard";
-      router.push(redirectPath);
-    } catch (error) {
+      setTimeout(() => {
+        router.push(redirectPath);
+      }, 500);
+    } catch (error: unknown) {
       console.error("Login error:", error);
+      
+      let errorMessage = "An unexpected error occurred. Please try again.";
+      
+      if (error instanceof ApiClientError) {
+        if (error.status === 401 || error.status === 400) {
+          errorMessage = error.message || "Invalid credentials. Please check your email/username and password.";
+          setErrors({
+            general: errorMessage,
+          });
+        } else if (error.errors) {
+          const fieldErrors: typeof errors = {};
+          Object.keys(error.errors).forEach((key) => {
+            if (key === "identifier" || key === "password") {
+              fieldErrors[key] = error.errors![key]?.[0] || "Invalid input";
+            }
+          });
+          errorMessage = fieldErrors.identifier || fieldErrors.password || error.message || errorMessage;
+          setErrors({
+            ...fieldErrors,
+            general: errorMessage,
+          });
+        } else {
+          errorMessage = error.message || errorMessage;
+          setErrors({
+            general: errorMessage,
+          });
+        }
+      } else if (error instanceof Error) {
+        errorMessage = error.message || errorMessage;
+        setErrors({
+          general: errorMessage,
+        });
+      } else {
+        setErrors({
+          general: errorMessage,
+        });
+      }
+
+      showErrorToast(formatErrorMessage(errorMessage));
       setIsLoading(false);
     }
   };
@@ -148,6 +199,16 @@ export default function SignInPage() {
 
         <div className="px-6 sm:px-8 pb-8">
           <form onSubmit={handleSubmit} className="space-y-5">
+            {errors.general && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p
+                  className="text-sm text-red-600"
+                  style={{ fontFamily: "Poppins, sans-serif" }}
+                >
+                  {errors.general}
+                </p>
+              </div>
+            )}
             <div>
               <label
                 className="block text-sm font-medium text-gray-700 mb-2"

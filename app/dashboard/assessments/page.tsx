@@ -1,20 +1,13 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Icon } from "@iconify/react";
-
-interface Child {
-  id: string;
-  name: string;
-  grade: string;
-  school: string;
-  studentId: string;
-}
+import { getParentAssessments, ParentAssessment } from "@/lib/api/parent";
+import { showErrorToast } from "@/lib/toast";
 
 interface Assessment {
   id: string;
-  childId: string;
   childName: string;
   title: string;
   subject: string;
@@ -23,124 +16,24 @@ interface Assessment {
   score?: number;
   maxScore: number;
   dueDate: string;
-  completedDate?: string;
+  startDate: string;
 }
 
-const dummyChildren: Child[] = [
-  {
-    id: "1",
-    name: "Emma Johnson",
-    grade: "Grade 2",
-    school: "Liberia Elementary School",
-    studentId: "STU001",
-  },
-  {
-    id: "2",
-    name: "Michael Johnson",
-    grade: "Grade 4",
-    school: "Liberia Elementary School",
-    studentId: "STU002",
-  },
-];
+const mapAssessmentType = (type: string): "quiz" | "assignment" | "exam" | "project" => {
+  const upperType = type.toUpperCase();
+  if (upperType === "QUIZ") return "quiz";
+  if (upperType === "ASSIGNMENT") return "assignment";
+  if (upperType === "EXAM") return "exam";
+  if (upperType === "PROJECT") return "project";
+  return "assignment";
+};
 
-const dummyAssessments: Assessment[] = [
-  {
-    id: "1",
-    childId: "1",
-    childName: "Emma Johnson",
-    title: "Vowel Sounds Quiz",
-    subject: "Literacy",
-    type: "quiz",
-    status: "completed",
-    score: 18,
-    maxScore: 20,
-    dueDate: "2025-12-15",
-    completedDate: "2025-12-10",
-  },
-  {
-    id: "2",
-    childId: "1",
-    childName: "Emma Johnson",
-    title: "Addition and Subtraction",
-    subject: "Numeracy",
-    type: "assignment",
-    status: "completed",
-    score: 45,
-    maxScore: 50,
-    dueDate: "2025-12-18",
-    completedDate: "2025-12-12",
-  },
-  {
-    id: "3",
-    childId: "1",
-    childName: "Emma Johnson",
-    title: "Science Experiment Report",
-    subject: "Science",
-    type: "project",
-    status: "in-progress",
-    maxScore: 100,
-    dueDate: "2025-12-20",
-  },
-  {
-    id: "4",
-    childId: "1",
-    childName: "Emma Johnson",
-    title: "Mid-Term Exam",
-    subject: "All Subjects",
-    type: "exam",
-    status: "pending",
-    maxScore: 200,
-    dueDate: "2025-12-25",
-  },
-  {
-    id: "5",
-    childId: "1",
-    childName: "Emma Johnson",
-    title: "Reading Comprehension",
-    subject: "Literacy",
-    type: "assignment",
-    status: "completed",
-    score: 38,
-    maxScore: 40,
-    dueDate: "2025-12-08",
-    completedDate: "2025-12-07",
-  },
-  {
-    id: "6",
-    childId: "2",
-    childName: "Michael Johnson",
-    title: "Multiplication Tables",
-    subject: "Numeracy",
-    type: "quiz",
-    status: "completed",
-    score: 25,
-    maxScore: 25,
-    dueDate: "2025-12-14",
-    completedDate: "2025-12-13",
-  },
-  {
-    id: "7",
-    childId: "2",
-    childName: "Michael Johnson",
-    title: "History Essay",
-    subject: "Social Studies",
-    type: "assignment",
-    status: "in-progress",
-    maxScore: 50,
-    dueDate: "2025-12-22",
-  },
-  {
-    id: "8",
-    childId: "2",
-    childName: "Michael Johnson",
-    title: "Science Fair Project",
-    subject: "Science",
-    type: "project",
-    status: "pending",
-    maxScore: 100,
-    dueDate: "2025-12-30",
-  },
-];
+const mapAssessmentStatus = (status: string): "completed" | "in-progress" | "pending" => {
+  const upperStatus = status.toUpperCase();
+  if (upperStatus === "COMPLETED") return "completed";
+  if (upperStatus === "IN PROGRESS" || upperStatus === "IN_PROGRESS") return "in-progress";
+  return "pending";
+};
 
 const getTypeColor = (type: Assessment["type"]) => {
   switch (type) {
@@ -180,6 +73,9 @@ const formatDate = (dateString: string) => {
 };
 
 export default function AssessmentsPage() {
+  const [assessments, setAssessments] = useState<Assessment[]>([]);
+  const [summary, setSummary] = useState({ completed: 0, pending: 0, in_progress: 0 });
+  const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedChild, setSelectedChild] = useState<string>("All");
   const [selectedSubject, setSelectedSubject] = useState<string>("All");
@@ -188,28 +84,63 @@ export default function AssessmentsPage() {
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
-  const childrenOptions = useMemo(() => {
-    return ["All", ...dummyChildren.map((c) => c.name)];
+  useEffect(() => {
+    const fetchAssessments = async () => {
+      try {
+        setIsLoading(true);
+        const data = await getParentAssessments();
+        
+        const mappedAssessments: Assessment[] = data.assessments.map((assessment, index) => ({
+          id: `${assessment.child_name}-${assessment.assessment_title}-${index}`,
+          childName: assessment.child_name,
+          title: assessment.assessment_title,
+          subject: assessment.subject || "N/A",
+          type: mapAssessmentType(assessment.assessment_type),
+          status: mapAssessmentStatus(assessment.assessment_status),
+          score: assessment.child_score ?? undefined,
+          maxScore: assessment.assessment_score,
+          dueDate: assessment.due_date,
+          startDate: assessment.start_date,
+        }));
+
+        setAssessments(mappedAssessments);
+        setSummary(data.summary);
+      } catch (error) {
+        console.error("Error fetching assessments:", error);
+        showErrorToast("Failed to load assessments. Please try again.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchAssessments();
   }, []);
+
+  const childrenOptions = useMemo(() => {
+    const uniqueChildren = Array.from(
+      new Set(assessments.map((a) => a.childName))
+    ).sort();
+    return ["All", ...uniqueChildren];
+  }, [assessments]);
 
   const subjects = useMemo(() => {
     const uniqueSubjects = Array.from(
-      new Set(dummyAssessments.map((a) => a.subject))
+      new Set(assessments.map((a) => a.subject).filter((s) => s !== "N/A"))
     ).sort();
     return ["All", ...uniqueSubjects];
-  }, []);
+  }, [assessments]);
 
   const types = useMemo(() => {
     const uniqueTypes = Array.from(
-      new Set(dummyAssessments.map((a) => a.type))
+      new Set(assessments.map((a) => a.type))
     ).sort();
     return ["All", ...uniqueTypes.map((t) => t.charAt(0).toUpperCase() + t.slice(1))];
-  }, []);
+  }, [assessments]);
 
   const statusOptions = ["All", "Completed", "In Progress", "Pending"];
 
   const filteredAssessments = useMemo(() => {
-    return dummyAssessments.filter((assessment) => {
+    return assessments.filter((assessment) => {
       const matchesSearch =
         search.trim().length === 0 ||
         assessment.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -236,7 +167,7 @@ export default function AssessmentsPage() {
         matchesSearch && matchesChild && matchesSubject && matchesType && matchesStatus
       );
     });
-  }, [search, selectedChild, selectedSubject, selectedType, selectedStatus]);
+  }, [assessments, search, selectedChild, selectedSubject, selectedType, selectedStatus]);
 
   const totalPages = Math.max(
     1,
@@ -251,15 +182,18 @@ export default function AssessmentsPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const completedCount = filteredAssessments.filter(
-    (a) => a.status === "completed"
-  ).length;
-  const inProgressCount = filteredAssessments.filter(
-    (a) => a.status === "in-progress"
-  ).length;
-  const pendingCount = filteredAssessments.filter(
-    (a) => a.status === "pending"
-  ).length;
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading assessments...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -353,17 +287,17 @@ export default function AssessmentsPage() {
           <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
             <div className="flex gap-6 text-sm">
               <div className="text-center">
-                <p className="font-semibold text-green-600">{completedCount}</p>
+                <p className="font-semibold text-green-600">{summary.completed}</p>
                 <p className="text-gray-600">Completed</p>
               </div>
               <div className="text-center">
                 <p className="font-semibold text-yellow-600">
-                  {inProgressCount}
+                  {summary.in_progress}
                 </p>
                 <p className="text-gray-600">In Progress</p>
               </div>
               <div className="text-center">
-                <p className="font-semibold text-gray-600">{pendingCount}</p>
+                <p className="font-semibold text-gray-600">{summary.pending}</p>
                 <p className="text-gray-600">Pending</p>
               </div>
             </div>
@@ -400,7 +334,9 @@ export default function AssessmentsPage() {
                         {assessment.title}
                       </div>
                       <div className="text-sm text-gray-700 hidden md:block">
-                        {assessment.subject}
+                        <span className={assessment.subject === "N/A" ? "text-gray-400 italic" : ""}>
+                          {assessment.subject}
+                        </span>
                       </div>
                       <div className="hidden md:block">
                         <span
@@ -455,11 +391,6 @@ export default function AssessmentsPage() {
                       </div>
                       <div className="text-xs text-gray-500 md:text-right">
                         {formatDate(assessment.dueDate)}
-                        {assessment.completedDate && (
-                          <p className="text-xs text-green-600 mt-1 md:hidden">
-                            Completed: {formatDate(assessment.completedDate)}
-                          </p>
-                        )}
                       </div>
                     </div>
                   ))}

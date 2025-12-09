@@ -1,144 +1,86 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import TimeSpentAnalytics from "@/components/dashboard/TimeSpentAnalytics";
-
-interface Child {
-  id: string;
-  name: string;
-  grade: string;
-  school: string;
-}
-
-interface AnalyticsSummary {
-  childId: string;
-  totalAssessments: number;
-  completedAssessments: number;
-  averageScore: number;
-  period: string;
-  changeFromPrevious: number;
-}
-
-const dummyChildren: Child[] = [
-  {
-    id: "1",
-    name: "Emma Johnson",
-    grade: "Grade 2",
-    school: "Liberia Elementary School",
-  },
-  {
-    id: "2",
-    name: "Michael Johnson",
-    grade: "Grade 4",
-    school: "Liberia Elementary School",
-  },
-];
-
-const dummySummaries: AnalyticsSummary[] = [
-  {
-    childId: "1",
-    totalAssessments: 8,
-    completedAssessments: 6,
-    averageScore: 89,
-    period: "This Term",
-    changeFromPrevious: 5,
-  },
-  {
-    childId: "2",
-    totalAssessments: 6,
-    completedAssessments: 4,
-    averageScore: 92,
-    period: "This Term",
-    changeFromPrevious: 3,
-  },
-];
+import { getMyChildren, MyChild } from "@/lib/api/parent";
+import { getParentAnalytics, ParentAnalyticsResponse } from "@/lib/api/parent";
+import { showErrorToast } from "@/lib/toast";
 
 export default function AnalyticsPage() {
+  const [children, setChildren] = useState<MyChild[]>([]);
+  const [analytics, setAnalytics] = useState<ParentAnalyticsResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedChildId, setSelectedChildId] = useState<string>("All");
-  const [selectedPeriod, setSelectedPeriod] = useState<string>("This Term");
 
-  const childOptions = useMemo(
-    () => ["All", ...dummyChildren.map((child) => child.id)],
-    []
-  );
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setIsLoading(true);
+        const [childrenData, analyticsData] = await Promise.all([
+          getMyChildren(),
+          getParentAnalytics(),
+        ]);
+        setChildren(childrenData);
+        setAnalytics(analyticsData);
+      } catch (error) {
+        console.error("Error fetching analytics data:", error);
+        showErrorToast("Failed to load analytics data. Please try again.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  useEffect(() => {
+    const fetchAnalytics = async () => {
+      try {
+        setIsLoading(true);
+        const childId = selectedChildId === "All" ? null : selectedChildId;
+        const data = await getParentAnalytics(childId);
+        setAnalytics(data);
+      } catch (error) {
+        console.error("Error fetching analytics data:", error);
+        showErrorToast("Failed to load analytics data. Please try again.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchAnalytics();
+  }, [selectedChildId]);
 
   const selectedChild =
     selectedChildId === "All"
       ? null
-      : dummyChildren.find((child) => child.id === selectedChildId) || null;
-
-  const overallSummary = useMemo(() => {
-    if (selectedChild) {
-      return (
-        dummySummaries.find(
-          (summary) =>
-            summary.childId === selectedChild.id &&
-            summary.period === selectedPeriod
-        ) || null
-      );
-    }
-
-    const periodSummaries = dummySummaries.filter(
-      (s) => s.period === selectedPeriod
-    );
-
-    if (periodSummaries.length === 0) {
-      return null;
-    }
-
-    const totalAssessments = periodSummaries.reduce(
-      (sum, s) => sum + s.totalAssessments,
-      0
-    );
-    const completedAssessments = periodSummaries.reduce(
-      (sum, s) => sum + s.completedAssessments,
-      0
-    );
-    const averageScore =
-      periodSummaries.reduce((sum, s) => sum + s.averageScore, 0) /
-      periodSummaries.length;
-    const changeFromPrevious =
-      periodSummaries.reduce((sum, s) => sum + s.changeFromPrevious, 0) /
-      periodSummaries.length;
-
-    return {
-      childId: "all",
-      totalAssessments,
-      completedAssessments,
-      averageScore: Math.round(averageScore),
-      period: selectedPeriod,
-      changeFromPrevious: Math.round(changeFromPrevious),
-    } as AnalyticsSummary;
-  }, [selectedChild, selectedPeriod]);
+      : children.find((child) => child.id.toString() === selectedChildId) || null;
 
   const handleExportReport = () => {
+    if (!analytics) return;
+
     const headers = [
       "Child Name",
       "Grade Level",
       "School",
-      "Period",
       "Total Assessments",
       "Completed Assessments",
       "Average Score (%)",
-      "Change From Previous Period (%)",
+      "Total Subjects Touched",
+      "Estimated Total Hours",
     ];
 
-    const rows = dummyChildren.map((child) => {
-      const summary =
-        dummySummaries.find(
-          (s) => s.childId === child.id && s.period === selectedPeriod
-        ) || null;
-
+    const rows = children.map((child) => {
       return [
         child.name,
         child.grade,
         child.school,
-        selectedPeriod,
-        summary ? summary.totalAssessments.toString() : "0",
-        summary ? summary.completedAssessments.toString() : "0",
-        summary ? summary.averageScore.toString() : "0",
-        summary ? summary.changeFromPrevious.toString() : "0",
+        analytics.summarycards.total_assessments.toString(),
+        analytics.summarycards.total_completed_assessments.toString(),
+        analytics.summarycards.overall_average_score.toString(),
+        analytics.summarycards.total_subjects_touched.toString(),
+        analytics.summarycards.estimated_total_hours.toString(),
       ];
     });
 
@@ -159,13 +101,26 @@ export default function AnalyticsPage() {
     link.href = url;
     link.setAttribute(
       "download",
-      `child-performance-report-${selectedPeriod.replace(/\s+/g, "-").toLowerCase()}.csv`
+      `child-performance-report-${new Date().toISOString().split("T")[0]}.csv`
     );
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading analytics...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -184,30 +139,21 @@ export default function AnalyticsPage() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">
-                  Period Summary
+                  Analytics Summary
                 </h2>
                 <p className="text-sm text-gray-600">
-                  Select a child and period to review their overall performance.
+                  Select a child to review their overall performance and learning analytics.
                 </p>
               </div>
               <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-                <select
-                  value={selectedPeriod}
-                  onChange={(e) => setSelectedPeriod(e.target.value)}
-                  className="w-full sm:w-auto px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-gray-900 bg-white text-sm"
-                >
-                  <option value="This Term">This Term</option>
-                  <option value="Last Term">Last Term</option>
-                  <option value="This Year">This Year</option>
-                </select>
                 <select
                   value={selectedChildId}
                   onChange={(e) => setSelectedChildId(e.target.value)}
                   className="w-full sm:w-auto px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-gray-900 bg-white text-sm"
                 >
                   <option value="All">All Children</option>
-                  {dummyChildren.map((child) => (
-                    <option key={child.id} value={child.id}>
+                  {children.map((child) => (
+                    <option key={child.id} value={child.id.toString()}>
                       {child.name} ({child.grade})
                     </option>
                   ))}
@@ -223,14 +169,14 @@ export default function AnalyticsPage() {
             </div>
           </div>
 
-          {overallSummary && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          {analytics && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
               <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-4">
                 <p className="text-xs font-medium text-emerald-700 uppercase tracking-wide">
                   Total Assessments
                 </p>
                 <p className="mt-2 text-2xl font-bold text-emerald-900">
-                  {overallSummary.totalAssessments}
+                  {analytics.summarycards.total_assessments}
                 </p>
                 <p className="mt-1 text-xs text-emerald-800">
                   Across all tracked subjects
@@ -241,7 +187,7 @@ export default function AnalyticsPage() {
                   Completed
                 </p>
                 <p className="mt-2 text-2xl font-bold text-blue-900">
-                  {overallSummary.completedAssessments}
+                  {analytics.summarycards.total_completed_assessments}
                 </p>
                 <p className="mt-1 text-xs text-blue-800">
                   Successfully submitted assessments
@@ -252,11 +198,32 @@ export default function AnalyticsPage() {
                   Average Score
                 </p>
                 <p className="mt-2 text-2xl font-bold text-amber-900">
-                  {overallSummary.averageScore}%
+                  {analytics.summarycards.overall_average_score}%
                 </p>
                 <p className="mt-1 text-xs text-amber-800">
-                  {overallSummary.changeFromPrevious >= 0 ? "+" : ""}
-                  {overallSummary.changeFromPrevious}% vs previous period
+                  Overall performance
+                </p>
+              </div>
+              <div className="bg-purple-50 border border-purple-100 rounded-lg p-4">
+                <p className="text-xs font-medium text-purple-700 uppercase tracking-wide">
+                  Subjects Touched
+                </p>
+                <p className="mt-2 text-2xl font-bold text-purple-900">
+                  {analytics.summarycards.total_subjects_touched}
+                </p>
+                <p className="mt-1 text-xs text-purple-800">
+                  Different subjects studied
+                </p>
+              </div>
+              <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-4">
+                <p className="text-xs font-medium text-indigo-700 uppercase tracking-wide">
+                  Total Hours
+                </p>
+                <p className="mt-2 text-2xl font-bold text-indigo-900">
+                  {analytics.summarycards.estimated_total_hours}
+                </p>
+                <p className="mt-1 text-xs text-indigo-800">
+                  Estimated time spent
                 </p>
               </div>
             </div>
@@ -275,7 +242,12 @@ export default function AnalyticsPage() {
             </div>
           )}
 
-          <TimeSpentAnalytics childId={selectedChild?.id ?? "all"} />
+          {analytics && analytics.estimated_time_spent && analytics.estimated_time_spent.length > 0 && (
+            <TimeSpentAnalytics 
+              childId={selectedChild?.id.toString() ?? "all"}
+              timeSpentData={analytics.estimated_time_spent}
+            />
+          )}
         </div>
       </div>
     </DashboardLayout>

@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Icon } from "@iconify/react";
+import { showSuccessToast } from "@/lib/toast";
 
 type NavItem = {
   href: string;
@@ -15,7 +16,7 @@ const parentNavItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: "solar:widget-5-bold" },
   { href: "/dashboard/children", label: "My Children", icon: "solar:users-group-two-rounded-bold" },
   { href: "/dashboard/grades", label: "Grades", icon: "solar:diploma-verified-bold" },
-  { href: "/dashboard/assessments", label: "Assessments", icon: "solar:document-text-bold" },
+  { href: "/dashboard/assessments", label: "General Assessment", icon: "solar:document-text-bold" },
   { href: "/dashboard/submissions", label: "Submissions", icon: "solar:file-check-bold" },
   { href: "/dashboard/analytics", label: "Analytics", icon: "solar:chart-2-bold" },
 ];
@@ -23,10 +24,13 @@ const parentNavItems: NavItem[] = [
 const teacherNavItems: NavItem[] = [
   { href: "/dashboard/teacher", label: "Dashboard", icon: "solar:widget-5-bold" },
   { href: "/dashboard/teacher/class", label: "My Class", icon: "solar:users-group-two-rounded-bold" },
+  { href: "/dashboard/teacher/subjects", label: "Subjects", icon: "solar:book-bold" },
+  { href: "/dashboard/teacher/lessons", label: "Lessons", icon: "solar:book-bookmark-bold" },
+  { href: "/dashboard/teacher/assignments", label: "Assignments", icon: "solar:document-add-bold" },
+  { href: "/dashboard/teacher/quizzes", label: "Quizzes", icon: "solar:clipboard-list-bold" },
+  { href: "/dashboard/teacher/assessments", label: "General Assessment", icon: "solar:document-text-bold" },
   { href: "/dashboard/teacher/grades", label: "Grades", icon: "solar:diploma-verified-bold" },
-  { href: "/dashboard/teacher/assessments", label: "Assessments", icon: "solar:document-text-bold" },
   { href: "/dashboard/teacher/submissions", label: "Submissions", icon: "solar:file-check-bold" },
-  { href: "/dashboard/teacher/analytics", label: "Analytics", icon: "solar:chart-2-bold" },
 ];
 
 function isActivePath(pathname: string, href: string) {
@@ -44,8 +48,23 @@ type SidebarProps = {
 
 export default function Sidebar({ mobileOpen = false, onClose, userName = "Parent", userRole = "Parent" }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const isTeacher = userRole === "Teacher";
   const navItems = isTeacher ? teacherNavItems : parentNavItems;
+
+  const handleLogout = () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("auth_token");
+      localStorage.removeItem("user");
+      showSuccessToast("You have been logged out successfully");
+      setTimeout(() => {
+        router.push("/sign-in");
+      }, 500);
+    }
+    if (onClose) {
+      onClose();
+    }
+  };
 
   return (
     <>
@@ -84,14 +103,8 @@ export default function Sidebar({ mobileOpen = false, onClose, userName = "Paren
               </div>
             </div>
             <button 
-              onClick={() => {
-                if (typeof window !== "undefined") {
-                  localStorage.removeItem("auth_token");
-                  localStorage.removeItem("user");
-                  window.location.href = "/sign-in";
-                }
-              }}
-              className="flex items-center justify-center gap-2 rounded-full bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700 w-[220px] h-[50px] mx-auto"
+              onClick={handleLogout}
+              className="flex items-center justify-center gap-2 rounded-full bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700 w-[220px] h-[50px] mx-auto transition-colors"
             >
               <Icon icon="solar:logout-2-bold" className="w-5 h-5" />
               Logout
@@ -138,17 +151,8 @@ export default function Sidebar({ mobileOpen = false, onClose, userName = "Paren
                   </div>
                 </div>
                 <button 
-                  onClick={() => {
-                    if (typeof window !== "undefined") {
-                      localStorage.removeItem("auth_token");
-                      localStorage.removeItem("user");
-                      window.location.href = "/sign-in";
-                    }
-                    if (onClose) {
-                      onClose();
-                    }
-                  }}
-                  className="flex items-center justify-center gap-2 rounded-full bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700 w-[220px] h-[50px] mx-auto"
+                  onClick={handleLogout}
+                  className="flex items-center justify-center gap-2 rounded-full bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700 w-[220px] h-[50px] mx-auto transition-colors"
                 >
                   <Icon icon="solar:logout-2-bold" className="w-5 h-5" />
                   Logout

@@ -1,46 +1,75 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import LinkChildModal from "@/components/dashboard/LinkChildModal";
-
-interface Child {
-  id: string;
-  name: string;
-  grade: string;
-  school: string;
-  studentId: string;
-}
-
-const dummyChildren: Child[] = [
-  {
-    id: "1",
-    name: "Emma Johnson",
-    grade: "Grade 2",
-    school: "Liberia Elementary School",
-    studentId: "STU001",
-  },
-  {
-    id: "2",
-    name: "Michael Johnson",
-    grade: "Grade 4",
-    school: "Liberia Elementary School",
-    studentId: "STU002",
-  },
-];
+import { getMyChildren, MyChild, linkChild, LinkChildResponse } from "@/lib/api/parent";
+import { showErrorToast, showSuccessToast } from "@/lib/toast";
 
 export default function MyChildrenPage() {
-  const [children, setChildren] = useState<Child[]>(dummyChildren);
+  const [children, setChildren] = useState<MyChild[]>([]);
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleLinkChild = (childData: Omit<Child, "id">) => {
-    const newChild: Child = {
-      ...childData,
-      id: Date.now().toString(),
+  useEffect(() => {
+    const fetchChildren = async () => {
+      try {
+        setIsLoading(true);
+        const data = await getMyChildren();
+        setChildren(data);
+      } catch (error) {
+        console.error("Error fetching children:", error);
+        showErrorToast("Failed to load children. Please try again.");
+      } finally {
+        setIsLoading(false);
+      }
     };
-    setChildren((prev) => [...prev, newChild]);
-    setIsLinkModalOpen(false);
+
+    fetchChildren();
+  }, []);
+
+  const handleLinkChild = async (childData: { student_id: number; student_email: string; student_phone: string }) => {
+    try {
+      setIsLoading(true);
+      const response: LinkChildResponse = await linkChild(childData);
+      
+      // Map the API response to our local MyChild interface
+      const newChild: MyChild = {
+        id: response.id,
+        name: response.name,
+        grade: response.grade,
+        school: response.school,
+        student_id: response.student_id,
+        created_at: response.created_at,
+      };
+      
+      setChildren((prev) => [...prev, newChild]);
+      setIsLinkModalOpen(false);
+      showSuccessToast("Child linked successfully!");
+      
+      // Refresh children list to get updated data
+      const data = await getMyChildren();
+      setChildren(data);
+    } catch (error: any) {
+      console.error("Error linking child:", error);
+      showErrorToast(error?.message || "Failed to link child. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  if (isLoading) {
+    return (
+      <DashboardLayout onLinkChild={() => setIsLinkModalOpen(true)}>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading children...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout onLinkChild={() => setIsLinkModalOpen(true)}>
@@ -136,7 +165,9 @@ export default function MyChildrenPage() {
                       {child.school}
                     </div>
                     <div className="text-sm text-gray-700 md:text-right">
-                      {child.studentId}
+                      <span className={child.student_id ? "" : "text-gray-400 italic"}>
+                        {child.student_id || "N/A"}
+                      </span>
                     </div>
                   </div>
                 ))}

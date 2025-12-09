@@ -5,27 +5,17 @@ import { FormEvent, useState } from "react";
 interface LinkChildModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onLink: (data: { name: string; grade: string; school: string; studentId: string }) => void;
+  onLink: (data: { student_id: number; student_email: string; student_phone: string }) => void;
 }
 
 export default function LinkChildModal({ isOpen, onClose, onLink }: LinkChildModalProps) {
   const [formData, setFormData] = useState({
-    name: "",
-    grade: "",
-    school: "",
-    studentId: "",
+    student_id: "",
+    student_email: "",
+    student_phone: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const grades = [
-    "Grade 1",
-    "Grade 2",
-    "Grade 3",
-    "Grade 4",
-    "Grade 5",
-    "Grade 6",
-  ];
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -37,10 +27,20 @@ export default function LinkChildModal({ isOpen, onClose, onLink }: LinkChildMod
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
-    if (!formData.name.trim()) newErrors.name = "Child's name is required";
-    if (!formData.grade) newErrors.grade = "Grade is required";
-    if (!formData.school.trim()) newErrors.school = "School name is required";
-    if (!formData.studentId.trim()) newErrors.studentId = "Student ID is required";
+    if (!formData.student_id.trim()) newErrors.student_id = "Student ID is required";
+    if (!formData.student_email.trim()) newErrors.student_email = "Student email is required";
+    if (!formData.student_phone.trim()) newErrors.student_phone = "Student phone is required";
+    
+    // Email validation
+    if (formData.student_email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.student_email)) {
+      newErrors.student_email = "Please enter a valid email address";
+    }
+    
+    // Phone validation (basic)
+    if (formData.student_phone.trim() && !/^[\d\s\-\+\(\)]+$/.test(formData.student_phone)) {
+      newErrors.student_phone = "Please enter a valid phone number";
+    }
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -50,18 +50,33 @@ export default function LinkChildModal({ isOpen, onClose, onLink }: LinkChildMod
     if (!validate()) return;
 
     setIsSubmitting(true);
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    onLink(formData);
-    setFormData({ name: "", grade: "", school: "", studentId: "" });
-    setErrors({});
-    setIsSubmitting(false);
+    try {
+      const studentIdNum = parseInt(formData.student_id, 10);
+      if (isNaN(studentIdNum)) {
+        setErrors({ student_id: "Student ID must be a valid number" });
+        setIsSubmitting(false);
+        return;
+      }
+      
+      onLink({
+        student_id: studentIdNum,
+        student_email: formData.student_email.trim(),
+        student_phone: formData.student_phone.trim(),
+      });
+      setFormData({ student_id: "", student_email: "", student_phone: "" });
+      setErrors({});
+    } catch (error) {
+      console.error("Error linking child:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md border border-gray-200">
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-gray-900" style={{ fontFamily: "Poppins, sans-serif" }}>
@@ -81,93 +96,66 @@ export default function LinkChildModal({ isOpen, onClose, onLink }: LinkChildMod
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2" style={{ fontFamily: "Poppins, sans-serif" }}>
-              Child's Full Name
-            </label>
-            <input
-              type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              placeholder="Enter child's full name"
-              className={`w-full h-12 px-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#059669] ${
-                errors.name ? "border-red-500" : "border-gray-300"
-              }`}
-              style={{ fontFamily: "Poppins, sans-serif" }}
-            />
-            {errors.name && (
-              <p className="mt-1 text-sm text-red-600" style={{ fontFamily: "Poppins, sans-serif" }}>
-                {errors.name}
-              </p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2" style={{ fontFamily: "Poppins, sans-serif" }}>
-              Grade
-            </label>
-            <select
-              name="grade"
-              value={formData.grade}
-              onChange={handleChange}
-              className={`w-full h-12 px-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#059669] ${
-                errors.grade ? "border-red-500" : "border-gray-300"
-              }`}
-              style={{ fontFamily: "Poppins, sans-serif" }}
-            >
-              <option value="">Select Grade</option>
-              {grades.map((grade) => (
-                <option key={grade} value={grade}>
-                  {grade}
-                </option>
-              ))}
-            </select>
-            {errors.grade && (
-              <p className="mt-1 text-sm text-red-600" style={{ fontFamily: "Poppins, sans-serif" }}>
-                {errors.grade}
-              </p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2" style={{ fontFamily: "Poppins, sans-serif" }}>
-              School Name
-            </label>
-            <input
-              type="text"
-              name="school"
-              value={formData.school}
-              onChange={handleChange}
-              placeholder="Enter school name"
-              className={`w-full h-12 px-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#059669] ${
-                errors.school ? "border-red-500" : "border-gray-300"
-              }`}
-              style={{ fontFamily: "Poppins, sans-serif" }}
-            />
-            {errors.school && (
-              <p className="mt-1 text-sm text-red-600" style={{ fontFamily: "Poppins, sans-serif" }}>
-                {errors.school}
-              </p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2" style={{ fontFamily: "Poppins, sans-serif" }}>
               Student ID
             </label>
             <input
-              type="text"
-              name="studentId"
-              value={formData.studentId}
+              type="number"
+              name="student_id"
+              value={formData.student_id}
               onChange={handleChange}
-              placeholder="Enter student ID"
+              placeholder="Enter student ID (number)"
               className={`w-full h-12 px-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#059669] ${
-                errors.studentId ? "border-red-500" : "border-gray-300"
+                errors.student_id ? "border-red-500" : "border-gray-300"
               }`}
               style={{ fontFamily: "Poppins, sans-serif" }}
             />
-            {errors.studentId && (
+            {errors.student_id && (
               <p className="mt-1 text-sm text-red-600" style={{ fontFamily: "Poppins, sans-serif" }}>
-                {errors.studentId}
+                {errors.student_id}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2" style={{ fontFamily: "Poppins, sans-serif" }}>
+              Student Email
+            </label>
+            <input
+              type="email"
+              name="student_email"
+              value={formData.student_email}
+              onChange={handleChange}
+              placeholder="Enter student email"
+              className={`w-full h-12 px-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#059669] ${
+                errors.student_email ? "border-red-500" : "border-gray-300"
+              }`}
+              style={{ fontFamily: "Poppins, sans-serif" }}
+            />
+            {errors.student_email && (
+              <p className="mt-1 text-sm text-red-600" style={{ fontFamily: "Poppins, sans-serif" }}>
+                {errors.student_email}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2" style={{ fontFamily: "Poppins, sans-serif" }}>
+              Student Phone
+            </label>
+            <input
+              type="tel"
+              name="student_phone"
+              value={formData.student_phone}
+              onChange={handleChange}
+              placeholder="Enter student phone number"
+              className={`w-full h-12 px-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#059669] ${
+                errors.student_phone ? "border-red-500" : "border-gray-300"
+              }`}
+              style={{ fontFamily: "Poppins, sans-serif" }}
+            />
+            {errors.student_phone && (
+              <p className="mt-1 text-sm text-red-600" style={{ fontFamily: "Poppins, sans-serif" }}>
+                {errors.student_phone}
               </p>
             )}
           </div>

@@ -1,20 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Icon } from "@iconify/react";
-
-interface Child {
-  id: string;
-  name: string;
-  grade: string;
-  school: string;
-  studentId: string;
-}
+import { getParentSubmissions, ParentSubmission } from "@/lib/api/parent";
+import { showErrorToast } from "@/lib/toast";
 
 interface Submission {
   id: string;
-  childId: string;
   childName: string;
   assessmentTitle: string;
   subject: string;
@@ -22,92 +15,9 @@ interface Submission {
   score?: number;
   maxScore: number;
   status: "graded" | "pending-review";
-  fileUrl?: string;
+  solution: string;
+  attachment: string | null;
 }
-
-const dummyChildren: Child[] = [
-  {
-    id: "1",
-    name: "Emma Johnson",
-    grade: "Grade 2",
-    school: "Liberia Elementary School",
-    studentId: "STU001",
-  },
-  {
-    id: "2",
-    name: "Michael Johnson",
-    grade: "Grade 4",
-    school: "Liberia Elementary School",
-    studentId: "STU002",
-  },
-];
-
-const dummySubmissions: Submission[] = [
-  {
-    id: "1",
-    childId: "1",
-    childName: "Emma Johnson",
-    assessmentTitle: "Vowel Sounds Quiz",
-    subject: "Literacy",
-    submittedAt: "2025-12-10T14:30:00",
-    score: 18,
-    maxScore: 20,
-    status: "graded",
-  },
-  {
-    id: "2",
-    childId: "1",
-    childName: "Emma Johnson",
-    assessmentTitle: "Addition and Subtraction",
-    subject: "Numeracy",
-    submittedAt: "2025-12-12T10:15:00",
-    score: 45,
-    maxScore: 50,
-    status: "graded",
-  },
-  {
-    id: "3",
-    childId: "1",
-    childName: "Emma Johnson",
-    assessmentTitle: "Reading Comprehension",
-    subject: "Literacy",
-    submittedAt: "2025-12-07T16:45:00",
-    score: 38,
-    maxScore: 40,
-    status: "graded",
-  },
-  {
-    id: "4",
-    childId: "1",
-    childName: "Emma Johnson",
-    assessmentTitle: "Science Experiment Report",
-    subject: "Science",
-    submittedAt: "2025-12-14T09:20:00",
-    maxScore: 100,
-    status: "pending-review",
-  },
-  {
-    id: "5",
-    childId: "2",
-    childName: "Michael Johnson",
-    assessmentTitle: "Multiplication Tables",
-    subject: "Numeracy",
-    submittedAt: "2025-12-11T11:00:00",
-    score: 25,
-    maxScore: 25,
-    status: "graded",
-  },
-  {
-    id: "6",
-    childId: "2",
-    childName: "Michael Johnson",
-    assessmentTitle: "History Essay",
-    subject: "Social Studies",
-    submittedAt: "2025-12-13T09:45:00",
-    maxScore: 50,
-    status: "pending-review",
-  },
-];
 
 const formatDateTime = (dateString: string) => {
   const date = new Date(dateString);
@@ -118,6 +28,12 @@ const formatDateTime = (dateString: string) => {
     hour: "numeric",
     minute: "2-digit",
   });
+};
+
+const mapSubmissionStatus = (status: string): "graded" | "pending-review" => {
+  const upperStatus = status.toUpperCase();
+  if (upperStatus === "GRADED") return "graded";
+  return "pending-review";
 };
 
 const getStatusColor = (status: Submission["status"]) => {
@@ -132,28 +48,68 @@ const getStatusColor = (status: Submission["status"]) => {
 };
 
 export default function SubmissionsPage() {
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [summary, setSummary] = useState({ graded: 0, pending: 0 });
+  const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedChild, setSelectedChild] = useState<string>("All");
   const [selectedSubject, setSelectedSubject] = useState<string>("All");
   const [selectedStatus, setSelectedStatus] = useState<string>("All");
   const [page, setPage] = useState(1);
+  const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const pageSize = 10;
 
-  const childrenOptions = useMemo(() => {
-    return ["All", ...dummyChildren.map((c) => c.name)];
+  useEffect(() => {
+    const fetchSubmissions = async () => {
+      try {
+        setIsLoading(true);
+        const data = await getParentSubmissions();
+        
+        const mappedSubmissions: Submission[] = data.submissions.map((submission, index) => ({
+          id: `${submission.child_name}-${submission.assessment_title}-${index}`,
+          childName: submission.child_name,
+          assessmentTitle: submission.assessment_title,
+          subject: submission.subject || "N/A",
+          submittedAt: submission.date_submitted,
+          score: submission.score ?? undefined,
+          maxScore: submission.assessment_score,
+          status: mapSubmissionStatus(submission.submission_status),
+          solution: submission.solution.solution,
+          attachment: submission.solution.attachment,
+        }));
+
+        setSubmissions(mappedSubmissions);
+        setSummary(data.summary);
+      } catch (error) {
+        console.error("Error fetching submissions:", error);
+        showErrorToast("Failed to load submissions. Please try again.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchSubmissions();
   }, []);
+
+  const childrenOptions = useMemo(() => {
+    const uniqueChildren = Array.from(
+      new Set(submissions.map((s) => s.childName))
+    ).sort();
+    return ["All", ...uniqueChildren];
+  }, [submissions]);
 
   const subjects = useMemo(() => {
     const uniqueSubjects = Array.from(
-      new Set(dummySubmissions.map((s) => s.subject))
+      new Set(submissions.map((s) => s.subject).filter((s) => s !== "N/A"))
     ).sort();
     return ["All", ...uniqueSubjects];
-  }, []);
+  }, [submissions]);
 
   const statusOptions = ["All", "Graded", "Pending Review"];
 
   const filteredSubmissions = useMemo(() => {
-    return dummySubmissions.filter((submission) => {
+    return submissions.filter((submission) => {
       const matchesSearch =
         search.trim().length === 0 ||
         submission.assessmentTitle
@@ -176,7 +132,7 @@ export default function SubmissionsPage() {
 
       return matchesSearch && matchesChild && matchesSubject && matchesStatus;
     });
-  }, [search, selectedChild, selectedSubject, selectedStatus]);
+  }, [submissions, search, selectedChild, selectedSubject, selectedStatus]);
 
   const totalPages = Math.max(1, Math.ceil(filteredSubmissions.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -188,12 +144,18 @@ export default function SubmissionsPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const gradedCount = filteredSubmissions.filter(
-    (s) => s.status === "graded"
-  ).length;
-  const pendingReviewCount = filteredSubmissions.filter(
-    (s) => s.status === "pending-review"
-  ).length;
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading submissions...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -273,12 +235,12 @@ export default function SubmissionsPage() {
           <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
             <div className="flex gap-6 text-sm">
               <div className="text-center">
-                <p className="font-semibold text-green-600">{gradedCount}</p>
+                <p className="font-semibold text-green-600">{summary.graded}</p>
                 <p className="text-gray-600">Graded</p>
               </div>
               <div className="text-center">
                 <p className="font-semibold text-yellow-600">
-                  {pendingReviewCount}
+                  {summary.pending}
                 </p>
                 <p className="text-gray-600">Pending Review</p>
               </div>
@@ -326,7 +288,9 @@ export default function SubmissionsPage() {
                           {submission.assessmentTitle}
                         </div>
                         <div className="hidden md:block text-sm text-gray-700">
-                          {submission.subject}
+                          <span className={submission.subject === "N/A" ? "text-gray-400 italic" : ""}>
+                            {submission.subject}
+                          </span>
                         </div>
                         <div>
                           {hasScore ? (
@@ -359,7 +323,11 @@ export default function SubmissionsPage() {
                         <div className="flex md:justify-end">
                           <button
                             type="button"
-                            className="inline-flex items-center gap-1 rounded-full border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                            onClick={() => {
+                              setSelectedSubmission(submission);
+                              setIsModalOpen(true);
+                            }}
+                            className="inline-flex items-center gap-1 rounded-full border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                           >
                             <Icon
                               icon="solar:eye-bold"
@@ -447,6 +415,152 @@ export default function SubmissionsPage() {
           )}
         </div>
       </div>
+
+      {isModalOpen && selectedSubmission && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col border border-gray-200">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900" style={{ fontFamily: "Poppins, sans-serif" }}>
+                Submission Details
+              </h2>
+              <button
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setSelectedSubmission(null);
+                }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <Icon icon="solar:close-circle-bold" className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 block">
+                    Child Name
+                  </label>
+                  <p className="text-sm font-semibold text-gray-900">
+                    {selectedSubmission.childName}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 block">
+                    Assessment Title
+                  </label>
+                  <p className="text-sm font-semibold text-gray-900">
+                    {selectedSubmission.assessmentTitle}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 block">
+                    Subject
+                  </label>
+                  <p className={`text-sm text-gray-900 ${selectedSubmission.subject === "N/A" ? "text-gray-400 italic" : ""}`}>
+                    {selectedSubmission.subject}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 block">
+                    Status
+                  </label>
+                  <span
+                    className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(
+                      selectedSubmission.status
+                    )}`}
+                  >
+                    {selectedSubmission.status === "graded"
+                      ? "Graded"
+                      : "Pending Review"}
+                  </span>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 block">
+                    Score
+                  </label>
+                  {selectedSubmission.score !== undefined ? (
+                    <div>
+                      <p className="text-sm font-bold text-gray-900">
+                        {selectedSubmission.score}/{selectedSubmission.maxScore}
+                      </p>
+                      <p className="text-xs text-gray-600">
+                        {Math.round(
+                          (selectedSubmission.score / selectedSubmission.maxScore) * 100
+                        )}%
+                      </p>
+                    </div>
+                  ) : (
+                    <span className="text-sm text-gray-400">—</span>
+                  )}
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 block">
+                    Submitted At
+                  </label>
+                  <p className="text-sm text-gray-900">
+                    {formatDateTime(selectedSubmission.submittedAt)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-200 pt-6">
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3 block">
+                  Solution
+                </label>
+                <div className="bg-gray-50 rounded-lg p-4 max-h-64 overflow-y-auto">
+                  <p className="text-sm text-gray-900 whitespace-pre-wrap" style={{ fontFamily: "Poppins, sans-serif" }}>
+                    {selectedSubmission.solution || "No solution provided."}
+                  </p>
+                </div>
+              </div>
+
+              {selectedSubmission.attachment && (
+                <div className="border-t border-gray-200 pt-6">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3 block">
+                    Attachment
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <a
+                      href={selectedSubmission.attachment}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium"
+                    >
+                      <Icon icon="solar:download-bold" className="w-4 h-4" />
+                      View Attachment
+                    </a>
+                    {selectedSubmission.attachment.match(/\.(jpg|jpeg|png|gif|webp)$/i) && (
+                      <div className="flex-1">
+                        <img
+                          src={selectedSubmission.attachment}
+                          alt="Submission attachment"
+                          className="max-w-full max-h-48 rounded-lg border border-gray-200"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-gray-200 flex justify-end">
+              <button
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setSelectedSubmission(null);
+                }}
+                className="px-6 py-2.5 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 transition-colors"
+                style={{ fontFamily: "Poppins, sans-serif" }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

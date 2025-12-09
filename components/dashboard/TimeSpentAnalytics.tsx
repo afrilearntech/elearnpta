@@ -1,36 +1,49 @@
 "use client";
 
+import { EstimatedTimeSpent } from "@/lib/api/parent";
+
 interface TimeSpentAnalyticsProps {
   childId: string;
+  timeSpentData?: EstimatedTimeSpent[];
 }
 
-interface TimeSpent {
-  subject: string;
-  hours: number;
-  minutes: number;
-  percentage: number;
-}
+const colors = ["#059669", "#3B82F6", "#8B5CF6", "#F59E0B", "#EF4444", "#10B981", "#F97316", "#6366F1"];
 
-const dummyTimeSpent: TimeSpent[] = [
-  { subject: "Literacy", hours: 12, minutes: 30, percentage: 35 },
-  { subject: "Numeracy", hours: 10, minutes: 15, percentage: 28 },
-  { subject: "Science", hours: 8, minutes: 45, percentage: 22 },
-  { subject: "Social Studies", hours: 4, minutes: 20, percentage: 15 },
-];
+export default function TimeSpentAnalytics({ childId, timeSpentData = [] }: TimeSpentAnalyticsProps) {
+  if (!timeSpentData || timeSpentData.length === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
+        <div className="mb-4">
+          <h3 className="text-lg font-bold text-gray-900 mb-2">
+            Time Spent on Assessments
+          </h3>
+          <p className="text-sm text-gray-600">No time data available yet.</p>
+        </div>
+      </div>
+    );
+  }
 
-const colors = ["#059669", "#3B82F6", "#8B5CF6", "#F59E0B"];
+  // Calculate total time from the data
+  const totalTime = timeSpentData.reduce((sum, item) => {
+    // Parse time string like "12h 30m" or "2h" or "45m"
+    const timeStr = item.time;
+    let hours = 0;
+    let minutes = 0;
+    
+    const hourMatch = timeStr.match(/(\d+)h/);
+    const minuteMatch = timeStr.match(/(\d+)m/);
+    
+    if (hourMatch) hours = parseInt(hourMatch[1], 10);
+    if (minuteMatch) minutes = parseInt(minuteMatch[1], 10);
+    
+    return sum + hours * 60 + minutes;
+  }, 0);
 
-const formatTime = (hours: number, minutes: number) => {
-  if (hours === 0) return `${minutes}m`;
-  if (minutes === 0) return `${hours}h`;
-  return `${hours}h ${minutes}m`;
-};
-
-export default function TimeSpentAnalytics({ childId }: TimeSpentAnalyticsProps) {
-  const totalHours = dummyTimeSpent.reduce((sum, item) => sum + item.hours, 0);
-  const totalMinutes = dummyTimeSpent.reduce((sum, item) => sum + item.minutes, 0);
-  const totalTimeInMinutes = totalHours * 60 + totalMinutes;
-  const totalTimeFormatted = formatTime(totalHours, totalMinutes);
+  const totalHours = Math.floor(totalTime / 60);
+  const totalMinutes = totalTime % 60;
+  const totalTimeFormatted = totalHours > 0 
+    ? (totalMinutes > 0 ? `${totalHours}h ${totalMinutes}m` : `${totalHours}h`)
+    : `${totalMinutes}m`;
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
@@ -49,10 +62,7 @@ export default function TimeSpentAnalytics({ childId }: TimeSpentAnalyticsProps)
       </div>
 
       <div className="space-y-3">
-        {dummyTimeSpent.map((item, index) => {
-          const timeInMinutes = item.hours * 60 + item.minutes;
-          const percentageOfTotal = (timeInMinutes / totalTimeInMinutes) * 100;
-
+        {timeSpentData.map((item, index) => {
           return (
             <div key={index}>
               <div className="flex items-center justify-between mb-1.5">
@@ -66,20 +76,20 @@ export default function TimeSpentAnalytics({ childId }: TimeSpentAnalyticsProps)
                   </span>
                 </div>
                 <span className="text-xs font-semibold text-gray-700">
-                  {formatTime(item.hours, item.minutes)}
+                  {item.time}
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-1.5">
                 <div
                   className="h-1.5 rounded-full transition-all"
                   style={{
-                    width: `${percentageOfTotal}%`,
+                    width: `${item.percentage}%`,
                     backgroundColor: colors[index % colors.length],
                   }}
                 ></div>
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                {percentageOfTotal.toFixed(1)}% of total time
+                {item.percentage.toFixed(1)}% of total time
               </p>
             </div>
           );
@@ -90,7 +100,7 @@ export default function TimeSpentAnalytics({ childId }: TimeSpentAnalyticsProps)
         <div className="grid grid-cols-2 gap-3">
           <div className="text-center">
             <p className="text-xl font-bold text-gray-900">
-              {dummyTimeSpent.length}
+              {timeSpentData.length}
             </p>
             <p className="text-xs text-gray-600">
               Subjects
@@ -98,7 +108,7 @@ export default function TimeSpentAnalytics({ childId }: TimeSpentAnalyticsProps)
           </div>
           <div className="text-center">
             <p className="text-xl font-bold text-gray-900">
-              {Math.round(totalTimeInMinutes / 60)}
+              {totalHours}
             </p>
             <p className="text-xs text-gray-600">
               Total Hours
