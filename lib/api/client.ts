@@ -70,6 +70,13 @@ export async function apiRequest<T>(
     if (error instanceof ApiClientError) {
       throw error;
     }
+    // Handle network errors (like "Failed to fetch")
+    if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      throw new ApiClientError(
+        'Network error: Unable to reach the server. Please check your connection and try again.',
+        0
+      );
+    }
     throw new ApiClientError(
       error instanceof Error ? error.message : 'An unexpected error occurred',
       0

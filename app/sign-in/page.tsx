@@ -88,11 +88,18 @@ export default function SignInPage() {
       let errorMessage = "An unexpected error occurred. Please try again.";
       
       if (error instanceof ApiClientError) {
-        if (error.status === 401 || error.status === 400) {
+        if (error.status === 403) {
+          const approvalMessage = "Your account is pending approval. Please wait for your account to be approved before logging in. You will be notified once your account is ready.";
+          showErrorToast(approvalMessage, { duration: 6000 });
+          setErrors({
+            general: "Account pending approval. Please wait for approval before logging in.",
+          });
+        } else if (error.status === 401 || error.status === 400) {
           errorMessage = error.message || "Invalid credentials. Please check your email/username and password.";
           setErrors({
             general: errorMessage,
           });
+          showErrorToast(formatErrorMessage(errorMessage));
         } else if (error.errors) {
           const fieldErrors: typeof errors = {};
           Object.keys(error.errors).forEach((key) => {
@@ -105,24 +112,27 @@ export default function SignInPage() {
             ...fieldErrors,
             general: errorMessage,
           });
+          showErrorToast(formatErrorMessage(errorMessage));
         } else {
           errorMessage = error.message || errorMessage;
           setErrors({
             general: errorMessage,
           });
+          showErrorToast(formatErrorMessage(errorMessage));
         }
       } else if (error instanceof Error) {
         errorMessage = error.message || errorMessage;
         setErrors({
           general: errorMessage,
         });
+        showErrorToast(formatErrorMessage(errorMessage));
       } else {
         setErrors({
           general: errorMessage,
         });
+        showErrorToast(formatErrorMessage(errorMessage));
       }
 
-      showErrorToast(formatErrorMessage(errorMessage));
       setIsLoading(false);
     }
   };

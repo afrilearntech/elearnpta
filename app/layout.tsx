@@ -10,8 +10,11 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: "Parent & Teacher Portal",
-  description: "Login portal for parents and teachers",
+  title: "MOE - ELEARN",
+  description: "Parent & Teacher Portal - Login portal for parents and teachers",
+  icons: {
+    icon: '/moe.png',
+  },
 };
 
 export default function RootLayout({

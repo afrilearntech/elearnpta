@@ -2,50 +2,74 @@
 
 import { useState, useEffect } from "react";
 import { Icon } from "@iconify/react";
-import { createLessonAssessment, getTeacherLessons, TeacherLesson } from "@/lib/api/teacher";
+import { createGeneralAssessment } from "@/lib/api/teacher";
 import { showErrorToast, showSuccessToast } from "@/lib/toast";
+import { ApiClientError } from "@/lib/api/client";
 
-interface CreateAssignmentModalProps {
+interface CreateGeneralAssessmentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export default function CreateAssignmentModal({ isOpen, onClose, onSuccess }: CreateAssignmentModalProps) {
-  const [lessons, setLessons] = useState<TeacherLesson[]>([]);
-  const [isLoadingLessons, setIsLoadingLessons] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+const GRADE_OPTIONS = [
+  "GRADE 1",
+  "GRADE 2",
+  "GRADE 3",
+  "GRADE 4",
+  "GRADE 5",
+  "GRADE 6",
+  "GRADE 7",
+  "GRADE 8",
+  "GRADE 9",
+  "GRADE 10",
+  "GRADE 11",
+  "GRADE 12",
+];
 
+const TYPE_OPTIONS = [
+  { value: "QUIZ", label: "Quiz" },
+  { value: "ASSIGNMENT", label: "Assignment" },
+];
+
+export default function CreateGeneralAssessmentModal({
+  isOpen,
+  onClose,
+  onSuccess,
+}: CreateGeneralAssessmentModalProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
-    lesson: "",
     title: "",
+    type: "QUIZ" as "QUIZ" | "ASSIGNMENT",
     instructions: "",
     marks: "",
     due_at: "",
+    grade: "",
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (isOpen) {
-      fetchLessons();
+      resetForm();
     }
   }, [isOpen]);
 
-  const fetchLessons = async () => {
-    try {
-      setIsLoadingLessons(true);
-      const data = await getTeacherLessons();
-      setLessons(data);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to load lessons.";
-      showErrorToast(message);
-    } finally {
-      setIsLoadingLessons(false);
-    }
+  const resetForm = () => {
+    setFormData({
+      title: "",
+      type: "QUIZ",
+      instructions: "",
+      marks: "",
+      due_at: "",
+      grade: "",
+    });
+    setErrors({});
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+  ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
     if (errors[name]) {
@@ -55,16 +79,22 @@ export default function CreateAssignmentModal({ isOpen, onClose, onSuccess }: Cr
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
-    if (!formData.lesson) newErrors.lesson = "Please select a lesson";
-    if (!formData.title.trim()) newErrors.title = "Title is required";
-    if (!formData.instructions.trim()) newErrors.instructions = "Instructions are required";
+
+    if (!formData.title.trim()) {
+      newErrors.title = "Title is required";
+    }
+
+    if (!formData.instructions.trim()) {
+      newErrors.instructions = "Instructions are required";
+    }
+
     if (!formData.marks || Number(formData.marks) <= 0) {
       newErrors.marks = "Marks must be greater than 0";
     }
-    if (!formData.due_at) newErrors.due_at = "Due date is required";
-    
-    // Validate due date is in the future
-    if (formData.due_at) {
+
+    if (!formData.due_at) {
+      newErrors.due_at = "Due date is required";
+    } else {
       const dueDate = new Date(formData.due_at);
       const now = new Date();
       if (dueDate <= now) {
@@ -72,19 +102,12 @@ export default function CreateAssignmentModal({ isOpen, onClose, onSuccess }: Cr
       }
     }
 
+    if (!formData.grade) {
+      newErrors.grade = "Grade is required";
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
-
-  const resetForm = () => {
-    setFormData({
-      lesson: "",
-      title: "",
-      instructions: "",
-      marks: "",
-      due_at: "",
-    });
-    setErrors({});
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -93,25 +116,41 @@ export default function CreateAssignmentModal({ isOpen, onClose, onSuccess }: Cr
 
     setIsSubmitting(true);
     try {
-      // Don't send given_by - let the backend infer it from the authentication token
-      await createLessonAssessment({
-        lesson: Number(formData.lesson),
-        type: "ASSIGNMENT",
+      await createGeneralAssessment({
         title: formData.title.trim(),
+        type: formData.type,
         instructions: formData.instructions.trim(),
         marks: Number(formData.marks),
         due_at: new Date(formData.due_at).toISOString(),
+        grade: formData.grade,
         status: "PENDING",
-        moderation_comment: "",
       });
 
-      showSuccessToast("Assignment created successfully!");
+      showSuccessToast("General assessment created successfully!");
       resetForm();
       onSuccess();
       onClose();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to create assignment.";
-      showErrorToast(message);
+      console.error("Error creating general assessment:", error);
+
+      if (error instanceof ApiClientError) {
+        if (error.errors) {
+          const fieldErrors: Record<string, string> = {};
+          Object.entries(error.errors).forEach(([field, messages]) => {
+            fieldErrors[field] = Array.isArray(messages) ? messages.join(", ") : messages;
+          });
+          setErrors(fieldErrors);
+
+          const errorMessage = error.message || "Please check the form for errors.";
+          showErrorToast(errorMessage);
+        } else {
+          showErrorToast(error.message || "Unable to create assessment.");
+        }
+      } else {
+        const message =
+          error instanceof Error ? error.message : "Unable to create assessment.";
+        showErrorToast(message);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -119,7 +158,6 @@ export default function CreateAssignmentModal({ isOpen, onClose, onSuccess }: Cr
 
   if (!isOpen) return null;
 
-  // Get minimum date (today)
   const today = new Date().toISOString().split("T")[0];
 
   return (
@@ -127,7 +165,7 @@ export default function CreateAssignmentModal({ isOpen, onClose, onSuccess }: Cr
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-gray-200">
         <div className="sticky top-0 bg-white border-b border-gray-200 p-6 z-10">
           <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-gray-900">Create Assignment</h2>
+            <h2 className="text-2xl font-bold text-gray-900">Create General Assessment</h2>
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -138,45 +176,17 @@ export default function CreateAssignmentModal({ isOpen, onClose, onSuccess }: Cr
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Lesson Selection */}
-          <div>
-            <label className="block text-sm font-medium text-gray-800 mb-2">
-              Lesson<span className="text-red-600">*</span>
-            </label>
-            <select
-              name="lesson"
-              value={formData.lesson}
-              onChange={handleChange}
-              disabled={isLoadingLessons}
-              className={`w-full h-11 rounded-lg border px-3 text-gray-700 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:bg-gray-50 ${
-                errors.lesson ? "border-red-500" : "border-gray-300"
-              }`}
-            >
-              <option value="">
-                {isLoadingLessons ? "Loading lessons..." : "Select a lesson"}
-              </option>
-              {lessons.map((lesson) => (
-                <option key={lesson.id} value={lesson.id}>
-                  {lesson.title} {lesson.description ? `- ${lesson.description.substring(0, 50)}...` : ""}
-                </option>
-              ))}
-            </select>
-            {errors.lesson && (
-              <p className="mt-1 text-sm text-red-600">{errors.lesson}</p>
-            )}
-          </div>
-
           {/* Title */}
           <div>
             <label className="block text-sm font-medium text-gray-800 mb-2">
-              Assignment Title<span className="text-red-600">*</span>
+              Title<span className="text-red-600">*</span>
             </label>
             <input
               type="text"
               name="title"
               value={formData.title}
               onChange={handleChange}
-              placeholder="e.g. Introduction to Algebra Assignment"
+              placeholder="Enter assessment title"
               className={`w-full h-11 rounded-lg border px-4 text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 ${
                 errors.title ? "border-red-500" : "border-gray-300"
               }`}
@@ -184,6 +194,55 @@ export default function CreateAssignmentModal({ isOpen, onClose, onSuccess }: Cr
             {errors.title && (
               <p className="mt-1 text-sm text-red-600">{errors.title}</p>
             )}
+          </div>
+
+          {/* Type and Grade */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-2">
+                Type<span className="text-red-600">*</span>
+              </label>
+              <select
+                name="type"
+                value={formData.type}
+                onChange={handleChange}
+                className={`w-full h-11 rounded-lg border px-3 text-gray-700 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 ${
+                  errors.type ? "border-red-500" : "border-gray-300"
+                }`}
+              >
+                {TYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              {errors.type && (
+                <p className="mt-1 text-sm text-red-600">{errors.type}</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-2">
+                Grade<span className="text-red-600">*</span>
+              </label>
+              <select
+                name="grade"
+                value={formData.grade}
+                onChange={handleChange}
+                className={`w-full h-11 rounded-lg border px-3 text-gray-700 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 ${
+                  errors.grade ? "border-red-500" : "border-gray-300"
+                }`}
+              >
+                <option value="">Select grade</option>
+                {GRADE_OPTIONS.map((grade) => (
+                  <option key={grade} value={grade}>
+                    {grade}
+                  </option>
+                ))}
+              </select>
+              {errors.grade && (
+                <p className="mt-1 text-sm text-red-600">{errors.grade}</p>
+              )}
+            </div>
           </div>
 
           {/* Instructions */}
@@ -195,9 +254,9 @@ export default function CreateAssignmentModal({ isOpen, onClose, onSuccess }: Cr
               name="instructions"
               value={formData.instructions}
               onChange={handleChange}
+              placeholder="Enter assessment instructions"
               rows={4}
-              placeholder="Provide detailed instructions for the assignment..."
-              className={`w-full resize-y rounded-lg border p-4 text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 ${
+              className={`w-full rounded-lg border px-4 py-3 text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 ${
                 errors.instructions ? "border-red-500" : "border-gray-300"
               }`}
             />
@@ -210,15 +269,15 @@ export default function CreateAssignmentModal({ isOpen, onClose, onSuccess }: Cr
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-800 mb-2">
-                Total Marks<span className="text-red-600">*</span>
+                Marks<span className="text-red-600">*</span>
               </label>
               <input
                 type="number"
                 name="marks"
                 value={formData.marks}
                 onChange={handleChange}
+                placeholder="Enter maximum marks"
                 min="1"
-                placeholder="e.g. 100"
                 className={`w-full h-11 rounded-lg border px-4 text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 ${
                   errors.marks ? "border-red-500" : "border-gray-300"
                 }`}
@@ -236,7 +295,7 @@ export default function CreateAssignmentModal({ isOpen, onClose, onSuccess }: Cr
                 name="due_at"
                 value={formData.due_at}
                 onChange={handleChange}
-                min={today}
+                min={new Date().toISOString().slice(0, 16)}
                 className={`w-full h-11 rounded-lg border px-4 text-gray-700 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 ${
                   errors.due_at ? "border-red-500" : "border-gray-300"
                 }`}
@@ -260,7 +319,14 @@ export default function CreateAssignmentModal({ isOpen, onClose, onSuccess }: Cr
               disabled={isSubmitting}
               className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {isSubmitting ? "Creating..." : "Create Assignment"}
+              {isSubmitting ? (
+                <span className="flex items-center gap-2">
+                  <Icon icon="solar:loading-bold" className="w-4 h-4 animate-spin" />
+                  Creating...
+                </span>
+              ) : (
+                "Create Assessment"
+              )}
             </button>
           </div>
         </form>

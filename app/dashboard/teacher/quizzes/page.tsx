@@ -5,6 +5,8 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Icon } from "@iconify/react";
 import { getTeacherLessonAssessments, TeacherLessonAssessment } from "@/lib/api/teacher";
 import { showErrorToast } from "@/lib/toast";
+import AddQuestionsModal from "@/components/teacher/AddQuestionsModal";
+import CreateQuizModal from "@/components/teacher/CreateQuizModal";
 
 const getStatusColor = (status: string) => {
   switch (status.toUpperCase()) {
@@ -48,6 +50,9 @@ export default function QuizzesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("All");
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isQuestionsModalOpen, setIsQuestionsModalOpen] = useState(false);
+  const [selectedAssessment, setSelectedAssessment] = useState<TeacherLessonAssessment | null>(null);
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
@@ -92,8 +97,18 @@ export default function QuizzesPage() {
   const statuses = ["All", "DRAFT", "PUBLISHED", "PENDING", "APPROVED", "REJECTED"];
 
   const handleCreateQuiz = () => {
-    // Placeholder for future implementation
-    console.log("Create quiz clicked");
+    setIsCreateModalOpen(true);
+  };
+
+  const handleCreateSuccess = async () => {
+    // Refresh quizzes list
+    try {
+      const data = await getTeacherLessonAssessments();
+      const quizzes = data.filter((item) => item.type === "QUIZ");
+      setAssessments(quizzes);
+    } catch (error) {
+      console.error("Error refreshing quizzes:", error);
+    }
   };
 
   const handlePageChange = (newPage: number) => {
@@ -195,6 +210,9 @@ export default function QuizzesPage() {
                       <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase">
                         Created
                       </th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
@@ -230,6 +248,18 @@ export default function QuizzesPage() {
                         </td>
                         <td className="py-4 px-4">
                           <span className="text-sm text-gray-600">{formatDate(assessment.created_at)}</span>
+                        </td>
+                        <td className="py-4 px-4">
+                          <button
+                            onClick={() => {
+                              setSelectedAssessment(assessment);
+                              setIsQuestionsModalOpen(true);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                          >
+                            <Icon icon="solar:question-circle-bold" className="w-4 h-4" />
+                            <span>Add Questions</span>
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -302,6 +332,23 @@ export default function QuizzesPage() {
           )}
         </div>
       </div>
+      <CreateQuizModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSuccess={handleCreateSuccess}
+      />
+      {selectedAssessment && (
+        <AddQuestionsModal
+          isOpen={isQuestionsModalOpen}
+          onClose={() => {
+            setIsQuestionsModalOpen(false);
+            setSelectedAssessment(null);
+          }}
+          assessmentId={selectedAssessment.id}
+          assessmentType="lesson"
+          assessmentTitle={selectedAssessment.title}
+        />
+      )}
     </DashboardLayout>
   );
 }

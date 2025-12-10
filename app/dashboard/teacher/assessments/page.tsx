@@ -1,95 +1,46 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Icon } from "@iconify/react";
+import { getGeneralAssessments, GeneralAssessment } from "@/lib/api/teacher";
+import { showErrorToast } from "@/lib/toast";
+import CreateGeneralAssessmentModal from "@/components/teacher/CreateGeneralAssessmentModal";
+import AddQuestionsModal from "@/components/teacher/AddQuestionsModal";
 
 interface Assessment {
-  id: string;
+  id: number;
   title: string;
-  subject: string;
-  type: "quiz" | "assignment" | "exam" | "project";
+  grade: string;
+  type: "QUIZ" | "ASSIGNMENT";
   dueDate: string;
   maxScore: number;
-  totalSubmissions: number;
-  pendingSubmissions: number;
-  gradedSubmissions: number;
+  status: string;
   createdDate: string;
 }
 
-const dummyAssessments: Assessment[] = [
-  {
-    id: "1",
-    title: "Vowel Sounds Quiz",
-    subject: "Literacy",
-    type: "quiz",
-    dueDate: "2025-12-15",
-    maxScore: 20,
-    totalSubmissions: 15,
-    pendingSubmissions: 3,
-    gradedSubmissions: 12,
-    createdDate: "2025-12-01",
-  },
-  {
-    id: "2",
-    title: "Addition and Subtraction",
-    subject: "Numeracy",
-    type: "assignment",
-    dueDate: "2025-12-18",
-    maxScore: 50,
-    totalSubmissions: 15,
-    pendingSubmissions: 5,
-    gradedSubmissions: 10,
-    createdDate: "2025-12-02",
-  },
-  {
-    id: "3",
-    title: "Science Experiment Report",
-    subject: "Science",
-    type: "project",
-    dueDate: "2025-12-20",
-    maxScore: 100,
-    totalSubmissions: 12,
-    pendingSubmissions: 8,
-    gradedSubmissions: 4,
-    createdDate: "2025-12-03",
-  },
-  {
-    id: "4",
-    title: "Mid-Term Exam",
-    subject: "All Subjects",
-    type: "exam",
-    dueDate: "2025-12-25",
-    maxScore: 200,
-    totalSubmissions: 0,
-    pendingSubmissions: 0,
-    gradedSubmissions: 0,
-    createdDate: "2025-12-05",
-  },
-  {
-    id: "5",
-    title: "Reading Comprehension",
-    subject: "Literacy",
-    type: "assignment",
-    dueDate: "2025-12-08",
-    maxScore: 40,
-    totalSubmissions: 15,
-    pendingSubmissions: 0,
-    gradedSubmissions: 15,
-    createdDate: "2025-11-28",
-  },
-];
 
-const getTypeColor = (type: Assessment["type"]) => {
+const getTypeColor = (type: "QUIZ" | "ASSIGNMENT") => {
   switch (type) {
-    case "quiz":
+    case "QUIZ":
       return "bg-purple-100 text-purple-800 border-purple-200";
-    case "assignment":
+    case "ASSIGNMENT":
       return "bg-blue-100 text-blue-800 border-blue-200";
-    case "exam":
+    default:
+      return "bg-gray-100 text-gray-800 border-gray-200";
+  }
+};
+
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case "APPROVED":
+      return "bg-green-100 text-green-800 border-green-200";
+    case "PENDING":
+      return "bg-amber-100 text-amber-800 border-amber-200";
+    case "DRAFT":
+      return "bg-gray-100 text-gray-800 border-gray-200";
+    case "REJECTED":
       return "bg-red-100 text-red-800 border-red-200";
-    case "project":
-      return "bg-orange-100 text-orange-800 border-orange-200";
     default:
       return "bg-gray-100 text-gray-800 border-gray-200";
   }
@@ -105,53 +56,74 @@ const formatDate = (dateString: string) => {
 };
 
 export default function TeacherAssessmentsPage() {
+  const [assessments, setAssessments] = useState<Assessment[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [selectedSubject, setSelectedSubject] = useState<string>("All");
+  const [selectedGrade, setSelectedGrade] = useState<string>("All");
   const [selectedType, setSelectedType] = useState<string>("All");
   const [page, setPage] = useState(1);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
-  const [formData, setFormData] = useState({
-    title: "",
-    subject: "",
-    type: "quiz" as Assessment["type"],
-    dueDate: "",
-    maxScore: "",
-  });
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [isQuestionsModalOpen, setIsQuestionsModalOpen] = useState(false);
+  const [selectedAssessment, setSelectedAssessment] = useState<Assessment | null>(null);
   const pageSize = 10;
 
-  const subjects = useMemo(() => {
-    const uniqueSubjects = Array.from(
-      new Set(dummyAssessments.map((a) => a.subject))
-    ).sort();
-    return ["All", ...uniqueSubjects];
+  useEffect(() => {
+    const fetchAssessments = async () => {
+      try {
+        setIsLoading(true);
+        const data = await getGeneralAssessments();
+        const mappedAssessments: Assessment[] = data.map((assessment) => ({
+          id: assessment.id,
+          title: assessment.title,
+          grade: assessment.grade,
+          type: assessment.type,
+          dueDate: assessment.due_at,
+          maxScore: assessment.marks,
+          status: assessment.status,
+          createdDate: assessment.created_at,
+        }));
+        setAssessments(mappedAssessments);
+      } catch (error) {
+        console.error("Error fetching assessments:", error);
+        showErrorToast("Failed to load assessments. Please try again.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchAssessments();
   }, []);
+
+  const grades = useMemo(() => {
+    const uniqueGrades = Array.from(
+      new Set(assessments.map((a) => a.grade))
+    ).sort();
+    return ["All", ...uniqueGrades];
+  }, [assessments]);
 
   const types = useMemo(() => {
     const uniqueTypes = Array.from(
-      new Set(dummyAssessments.map((a) => a.type))
+      new Set(assessments.map((a) => a.type))
     ).sort();
-    return ["All", ...uniqueTypes.map((t) => t.charAt(0).toUpperCase() + t.slice(1))];
-  }, []);
+    return ["All", ...uniqueTypes];
+  }, [assessments]);
 
   const filteredAssessments = useMemo(() => {
-    return dummyAssessments.filter((assessment) => {
+    return assessments.filter((assessment) => {
       const matchesSearch =
         search.trim().length === 0 ||
         assessment.title.toLowerCase().includes(search.toLowerCase()) ||
-        assessment.subject.toLowerCase().includes(search.toLowerCase());
+        assessment.grade.toLowerCase().includes(search.toLowerCase());
 
-      const matchesSubject =
-        selectedSubject === "All" || assessment.subject === selectedSubject;
+      const matchesGrade =
+        selectedGrade === "All" || assessment.grade === selectedGrade;
 
       const matchesType =
-        selectedType === "All" ||
-        assessment.type === selectedType.toLowerCase();
+        selectedType === "All" || assessment.type === selectedType;
 
-      return matchesSearch && matchesSubject && matchesType;
+      return matchesSearch && matchesGrade && matchesType;
     });
-  }, [search, selectedSubject, selectedType]);
+  }, [assessments, search, selectedGrade, selectedType]);
 
   const totalPages = Math.max(
     1,
@@ -165,62 +137,6 @@ export default function TeacherAssessmentsPage() {
     setPage(newPage);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    if (formErrors[name]) {
-      setFormErrors((prev) => ({ ...prev, [name]: "" }));
-    }
-  };
-
-  const validateForm = () => {
-    const errors: Record<string, string> = {};
-    if (!formData.title.trim()) errors.title = "Title is required";
-    if (!formData.subject.trim()) errors.subject = "Subject is required";
-    if (!formData.dueDate) errors.dueDate = "Due date is required";
-    if (!formData.maxScore || parseInt(formData.maxScore) <= 0) {
-      errors.maxScore = "Max score must be greater than 0";
-    }
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const handleCreateAssessment = async () => {
-    if (!validateForm()) return;
-
-    setIsCreating(true);
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      console.log("Creating assessment:", formData);
-      setIsCreateModalOpen(false);
-      setFormData({
-        title: "",
-        subject: "",
-        type: "quiz",
-        dueDate: "",
-        maxScore: "",
-      });
-      setFormErrors({});
-    } catch (error) {
-      console.error("Error creating assessment:", error);
-    } finally {
-      setIsCreating(false);
-    }
-  };
-
-  const totalPending = filteredAssessments.reduce(
-    (sum, a) => sum + a.pendingSubmissions,
-    0
-  );
-  const totalGraded = filteredAssessments.reduce(
-    (sum, a) => sum + a.gradedSubmissions,
-    0
-  );
-  const totalSubmissions = filteredAssessments.reduce(
-    (sum, a) => sum + a.totalSubmissions,
-    0
-  );
 
   return (
     <DashboardLayout>
@@ -260,16 +176,16 @@ export default function TeacherAssessmentsPage() {
             </div>
             <div className="flex flex-col sm:flex-row gap-4 sm:w-auto">
               <select
-                value={selectedSubject}
+                value={selectedGrade}
                 onChange={(e) => {
-                  setSelectedSubject(e.target.value);
+                  setSelectedGrade(e.target.value);
                   setPage(1);
                 }}
                 className="px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-gray-900 bg-white text-sm"
               >
-                {subjects.map((subject) => (
-                  <option key={subject} value={subject}>
-                    {subject}
+                {grades.map((grade) => (
+                  <option key={grade} value={grade}>
+                    {grade}
                   </option>
                 ))}
               </select>
@@ -283,72 +199,60 @@ export default function TeacherAssessmentsPage() {
               >
                 {types.map((type) => (
                   <option key={type} value={type}>
-                    {type}
+                    {type === "QUIZ" ? "Quiz" : type === "ASSIGNMENT" ? "Assignment" : type}
                   </option>
                 ))}
               </select>
             </div>
           </div>
 
-          <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200 flex-wrap gap-4">
-            <div className="flex gap-6 text-sm">
+          <div className="mb-4 pb-4 border-b border-gray-200">
+            <div className="flex items-center gap-4 text-sm">
               <div className="text-center">
                 <p className="font-semibold text-emerald-600 text-lg">
                   {filteredAssessments.length}
                 </p>
                 <p className="text-gray-600">Total Assessments</p>
               </div>
-              <div className="text-center">
-                <p className="font-semibold text-blue-600 text-lg">
-                  {totalSubmissions}
-                </p>
-                <p className="text-gray-600">Total Submissions</p>
-              </div>
-              <div className="text-center">
-                <p className="font-semibold text-amber-600 text-lg">
-                  {totalPending}
-                </p>
-                <p className="text-gray-600">Pending Review</p>
-              </div>
-              <div className="text-center">
-                <p className="font-semibold text-green-600 text-lg">
-                  {totalGraded}
-                </p>
-                <p className="text-gray-600">Graded</p>
-              </div>
             </div>
           </div>
 
-          {pagedAssessments.length > 0 ? (
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <Icon icon="solar:loading-bold" className="w-8 h-8 text-emerald-600 animate-spin mx-auto mb-2" />
+                <p className="text-gray-600">Loading assessments...</p>
+              </div>
+            </div>
+          ) : pagedAssessments.length > 0 ? (
             <>
               <div className="overflow-hidden rounded-lg border border-gray-200">
-                <div className="hidden md:grid grid-cols-8 gap-4 bg-gray-50 px-4 py-3 text-xs font-medium text-gray-500">
+                <div className="hidden md:grid grid-cols-7 gap-4 bg-gray-50 px-4 py-3 text-xs font-medium text-gray-500">
                   <div>Assessment</div>
-                  <div>Subject</div>
+                  <div>Grade</div>
                   <div>Type</div>
                   <div>Max Score</div>
-                  <div>Submissions</div>
-                  <div>Pending</div>
-                  <div>Graded</div>
+                  <div>Status</div>
                   <div className="text-right">Due Date</div>
+                  <div className="text-right">Actions</div>
                 </div>
 
                 <div className="divide-y divide-gray-200">
                   {pagedAssessments.map((assessment) => (
                     <div
                       key={assessment.id}
-                      className="px-4 py-3 flex flex-col gap-2 md:grid md:grid-cols-8 md:items-center md:gap-4 hover:bg-gray-50 transition-colors"
+                      className="px-4 py-3 flex flex-col gap-2 md:grid md:grid-cols-7 md:items-center md:gap-4 hover:bg-gray-50 transition-colors"
                     >
                       <div>
                         <p className="text-sm font-semibold text-gray-900">
                           {assessment.title}
                         </p>
                         <p className="text-xs text-gray-500 md:hidden">
-                          {assessment.subject} • {formatDate(assessment.dueDate)}
+                          {assessment.grade} • {formatDate(assessment.dueDate)}
                         </p>
                       </div>
                       <div className="text-sm text-gray-700 hidden md:block">
-                        {assessment.subject}
+                        {assessment.grade}
                       </div>
                       <div className="hidden md:block">
                         <span
@@ -356,30 +260,36 @@ export default function TeacherAssessmentsPage() {
                             assessment.type
                           )}`}
                         >
-                          {assessment.type.charAt(0).toUpperCase() +
-                            assessment.type.slice(1)}
+                          {assessment.type === "QUIZ" ? "Quiz" : "Assignment"}
                         </span>
                       </div>
                       <div className="text-sm font-medium text-gray-900 hidden md:block">
                         {assessment.maxScore}
                       </div>
                       <div className="hidden md:block">
-                        <p className="text-sm font-semibold text-gray-900">
-                          {assessment.totalSubmissions}
-                        </p>
-                      </div>
-                      <div className="hidden md:block">
-                        <p className="text-sm font-semibold text-amber-600">
-                          {assessment.pendingSubmissions}
-                        </p>
-                      </div>
-                      <div className="hidden md:block">
-                        <p className="text-sm font-semibold text-green-600">
-                          {assessment.gradedSubmissions}
-                        </p>
+                        <span
+                          className={`px-2 py-0.5 rounded text-xs font-medium border ${getStatusColor(
+                            assessment.status
+                          )}`}
+                        >
+                          {assessment.status}
+                        </span>
                       </div>
                       <div className="text-xs text-gray-500 md:text-right">
                         {formatDate(assessment.dueDate)}
+                      </div>
+                      <div className="md:text-right">
+                        <button
+                          onClick={() => {
+                            setSelectedAssessment(assessment);
+                            setIsQuestionsModalOpen(true);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                        >
+                          <Icon icon="solar:question-circle-bold" className="w-4 h-4" />
+                          <span className="hidden sm:inline">Add Questions</span>
+                          <span className="sm:hidden">Questions</span>
+                        </button>
                       </div>
                       <div className="md:hidden space-y-1 mt-2">
                         <div className="flex items-center justify-between text-xs">
@@ -389,8 +299,7 @@ export default function TeacherAssessmentsPage() {
                               assessment.type
                             )}`}
                           >
-                            {assessment.type.charAt(0).toUpperCase() +
-                              assessment.type.slice(1)}
+                            {assessment.type === "QUIZ" ? "Quiz" : "Assignment"}
                           </span>
                         </div>
                         <div className="flex items-center justify-between text-xs">
@@ -398,19 +307,13 @@ export default function TeacherAssessmentsPage() {
                           <span className="font-medium">{assessment.maxScore}</span>
                         </div>
                         <div className="flex items-center justify-between text-xs">
-                          <span className="text-gray-600">Submissions:</span>
-                          <span className="font-medium">{assessment.totalSubmissions}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-gray-600">Pending:</span>
-                          <span className="font-medium text-amber-600">
-                            {assessment.pendingSubmissions}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-gray-600">Graded:</span>
-                          <span className="font-medium text-green-600">
-                            {assessment.gradedSubmissions}
+                          <span className="text-gray-600">Status:</span>
+                          <span
+                            className={`px-2 py-0.5 rounded text-xs font-medium border ${getStatusColor(
+                              assessment.status
+                            )}`}
+                          >
+                            {assessment.status}
                           </span>
                         </div>
                       </div>
@@ -493,132 +396,39 @@ export default function TeacherAssessmentsPage() {
         </div>
       </div>
 
-      {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-bold text-gray-900">Create Assessment</h2>
-              <p className="text-sm text-gray-600 mt-1">
-                Add a new assessment for your class
-              </p>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Title *
-                </label>
-                <input
-                  type="text"
-                  name="title"
-                  value={formData.title}
-                  onChange={handleInputChange}
-                  placeholder="Enter assessment title"
-                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-gray-900 ${
-                    formErrors.title ? "border-red-500" : "border-gray-300"
-                  }`}
-                />
-                {formErrors.title && (
-                  <p className="mt-1 text-sm text-red-600">{formErrors.title}</p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Subject *
-                </label>
-                <input
-                  type="text"
-                  name="subject"
-                  value={formData.subject}
-                  onChange={handleInputChange}
-                  placeholder="Enter subject"
-                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-gray-900 ${
-                    formErrors.subject ? "border-red-500" : "border-gray-300"
-                  }`}
-                />
-                {formErrors.subject && (
-                  <p className="mt-1 text-sm text-red-600">{formErrors.subject}</p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Type *
-                </label>
-                <select
-                  name="type"
-                  value={formData.type}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-gray-900"
-                >
-                  <option value="quiz">Quiz</option>
-                  <option value="assignment">Assignment</option>
-                  <option value="exam">Exam</option>
-                  <option value="project">Project</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Due Date *
-                </label>
-                <input
-                  type="date"
-                  name="dueDate"
-                  value={formData.dueDate}
-                  onChange={handleInputChange}
-                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-gray-900 ${
-                    formErrors.dueDate ? "border-red-500" : "border-gray-300"
-                  }`}
-                />
-                {formErrors.dueDate && (
-                  <p className="mt-1 text-sm text-red-600">{formErrors.dueDate}</p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Max Score *
-                </label>
-                <input
-                  type="number"
-                  name="maxScore"
-                  value={formData.maxScore}
-                  onChange={handleInputChange}
-                  placeholder="Enter maximum score"
-                  min="1"
-                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-gray-900 ${
-                    formErrors.maxScore ? "border-red-500" : "border-gray-300"
-                  }`}
-                />
-                {formErrors.maxScore && (
-                  <p className="mt-1 text-sm text-red-600">{formErrors.maxScore}</p>
-                )}
-              </div>
-            </div>
-            <div className="p-6 border-t border-gray-200 flex gap-3 justify-end">
-              <button
-                onClick={() => {
-                  setIsCreateModalOpen(false);
-                  setFormData({
-                    title: "",
-                    subject: "",
-                    type: "quiz",
-                    dueDate: "",
-                    maxScore: "",
-                  });
-                  setFormErrors({});
-                }}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateAssessment}
-                disabled={isCreating}
-                className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {isCreating ? "Creating..." : "Create Assessment"}
-              </button>
-            </div>
-          </div>
-        </div>
+      <CreateGeneralAssessmentModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSuccess={async () => {
+          try {
+            const data = await getGeneralAssessments();
+            const mappedAssessments: Assessment[] = data.map((assessment) => ({
+              id: assessment.id,
+              title: assessment.title,
+              grade: assessment.grade,
+              type: assessment.type,
+              dueDate: assessment.due_at,
+              maxScore: assessment.marks,
+              status: assessment.status,
+              createdDate: assessment.created_at,
+            }));
+            setAssessments(mappedAssessments);
+          } catch (error) {
+            console.error("Error refreshing assessments:", error);
+          }
+        }}
+      />
+      {selectedAssessment && (
+        <AddQuestionsModal
+          isOpen={isQuestionsModalOpen}
+          onClose={() => {
+            setIsQuestionsModalOpen(false);
+            setSelectedAssessment(null);
+          }}
+          assessmentId={selectedAssessment.id}
+          assessmentType="general"
+          assessmentTitle={selectedAssessment.title}
+        />
       )}
     </DashboardLayout>
   );

@@ -70,3 +70,23 @@ export async function loginTeacher(
   }
 }
 
+export interface ChangePasswordRequest {
+  current_password: string;
+  new_password: string;
+  confirm_password: string;
+}
+
+export interface ChangePasswordResponse {
+  message?: string;
+  detail?: string;
+}
+
+export async function changePassword(
+  payload: ChangePasswordRequest
+): Promise<ChangePasswordResponse> {
+  return await apiRequest<ChangePasswordResponse>('/api-v1/auth/change-password/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+

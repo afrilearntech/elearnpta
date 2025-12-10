@@ -1,15 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Icon } from "@iconify/react";
-
-interface Student {
-  id: string;
-  name: string;
-  grade: string;
-  studentId: string;
-}
+import { getTeacherGrades, TeacherGrades } from "@/lib/api/teacher";
+import { showErrorToast } from "@/lib/toast";
 
 interface GradeRecord {
   id: string;
@@ -19,99 +14,15 @@ interface GradeRecord {
   grade: string;
   percentage: number;
   status: "excellent" | "good" | "needs-improvement";
-  term: string;
   updatedAt: string;
 }
 
-const dummyStudents: Student[] = [
-  {
-    id: "1",
-    name: "Emma Johnson",
-    grade: "Grade 2",
-    studentId: "STU001",
-  },
-  {
-    id: "2",
-    name: "Michael Johnson",
-    grade: "Grade 2",
-    studentId: "STU002",
-  },
-  {
-    id: "3",
-    name: "Sarah Williams",
-    grade: "Grade 2",
-    studentId: "STU003",
-  },
-];
-
-const dummyGrades: GradeRecord[] = [
-  {
-    id: "1",
-    studentId: "1",
-    studentName: "Emma Johnson",
-    subject: "Literacy",
-    grade: "A",
-    percentage: 92,
-    status: "excellent",
-    term: "Term 1",
-    updatedAt: "2025-12-01",
-  },
-  {
-    id: "2",
-    studentId: "1",
-    studentName: "Emma Johnson",
-    subject: "Numeracy",
-    grade: "B+",
-    percentage: 87,
-    status: "good",
-    term: "Term 1",
-    updatedAt: "2025-12-01",
-  },
-  {
-    id: "3",
-    studentId: "1",
-    studentName: "Emma Johnson",
-    subject: "Science",
-    grade: "A-",
-    percentage: 90,
-    status: "excellent",
-    term: "Term 1",
-    updatedAt: "2025-12-01",
-  },
-  {
-    id: "4",
-    studentId: "2",
-    studentName: "Michael Johnson",
-    subject: "Literacy",
-    grade: "A",
-    percentage: 94,
-    status: "excellent",
-    term: "Term 1",
-    updatedAt: "2025-12-01",
-  },
-  {
-    id: "5",
-    studentId: "2",
-    studentName: "Michael Johnson",
-    subject: "Numeracy",
-    grade: "A-",
-    percentage: 91,
-    status: "excellent",
-    term: "Term 1",
-    updatedAt: "2025-12-01",
-  },
-  {
-    id: "6",
-    studentId: "3",
-    studentName: "Sarah Williams",
-    subject: "Literacy",
-    grade: "B",
-    percentage: 82,
-    status: "good",
-    term: "Term 1",
-    updatedAt: "2025-12-01",
-  },
-];
+const mapStatus = (status: string): "excellent" | "good" | "needs-improvement" => {
+  const upperStatus = status.toUpperCase();
+  if (upperStatus === "EXCELLENT") return "excellent";
+  if (upperStatus === "GOOD") return "good";
+  return "needs-improvement";
+};
 
 const getStatusColor = (status: GradeRecord["status"]) => {
   switch (status) {
@@ -143,25 +54,61 @@ const formatDate = (dateString: string) => {
 };
 
 export default function TeacherGradesPage() {
+  const [gradesData, setGradesData] = useState<TeacherGrades | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<string>("All");
   const [selectedSubject, setSelectedSubject] = useState<string>("All");
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
-  const studentOptions = useMemo(() => {
-    return ["All", ...dummyStudents.map((s) => s.name)];
+  useEffect(() => {
+    const fetchGrades = async () => {
+      try {
+        setIsLoading(true);
+        const data = await getTeacherGrades();
+        setGradesData(data);
+      } catch (error) {
+        console.error("Error fetching grades:", error);
+        showErrorToast("Failed to load grades. Please try again.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchGrades();
   }, []);
+
+  const grades: GradeRecord[] = useMemo(() => {
+    if (!gradesData) return [];
+    return gradesData.grades.map((grade, index) => ({
+      id: `${grade.student_id}-${grade.subject}-${index}`,
+      studentId: grade.student_id || "N/A",
+      studentName: grade.student_name,
+      subject: grade.subject || "N/A",
+      grade: grade.grade_letter,
+      percentage: grade.percentage,
+      status: mapStatus(grade.status),
+      updatedAt: grade.updated_at,
+    }));
+  }, [gradesData]);
+
+  const studentOptions = useMemo(() => {
+    const uniqueStudents = Array.from(
+      new Set(grades.map((g) => g.studentName))
+    ).sort();
+    return ["All", ...uniqueStudents];
+  }, [grades]);
 
   const subjects = useMemo(() => {
     const uniqueSubjects = Array.from(
-      new Set(dummyGrades.map((g) => g.subject))
+      new Set(grades.map((g) => g.subject))
     ).sort();
     return ["All", ...uniqueSubjects];
-  }, []);
+  }, [grades]);
 
   const filteredGrades = useMemo(() => {
-    return dummyGrades.filter((grade) => {
+    return grades.filter((grade) => {
       const matchesSearch =
         search.trim().length === 0 ||
         grade.subject.toLowerCase().includes(search.toLowerCase()) ||
@@ -176,7 +123,7 @@ export default function TeacherGradesPage() {
 
       return matchesSearch && matchesStudent && matchesSubject;
     });
-  }, [search, selectedStudent, selectedSubject]);
+  }, [grades, search, selectedStudent, selectedSubject]);
 
   const totalPages = Math.max(1, Math.ceil(filteredGrades.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -249,7 +196,72 @@ export default function TeacherGradesPage() {
             </div>
           </div>
 
-          {pagedGrades.length > 0 ? (
+          {/* Summary Statistics */}
+          {gradesData && (
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
+              <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl p-4 border border-emerald-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-emerald-700 mb-1">Total Grades</p>
+                    <p className="text-2xl font-bold text-emerald-900">
+                      {gradesData.summary.total_grades}
+                    </p>
+                  </div>
+                  <div className="bg-emerald-200 rounded-lg p-3">
+                    <Icon icon="solar:diploma-verified-bold" className="w-6 h-6 text-emerald-700" />
+                  </div>
+                </div>
+              </div>
+              <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border border-green-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-green-700 mb-1">Excellent</p>
+                    <p className="text-2xl font-bold text-green-900">
+                      {gradesData.summary.excellent}
+                    </p>
+                  </div>
+                  <div className="bg-green-200 rounded-lg p-3">
+                    <Icon icon="solar:star-bold" className="w-6 h-6 text-green-700" />
+                  </div>
+                </div>
+              </div>
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-blue-700 mb-1">Good</p>
+                    <p className="text-2xl font-bold text-blue-900">
+                      {gradesData.summary.good}
+                    </p>
+                  </div>
+                  <div className="bg-blue-200 rounded-lg p-3">
+                    <Icon icon="solar:like-bold" className="w-6 h-6 text-blue-700" />
+                  </div>
+                </div>
+              </div>
+              <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl p-4 border border-yellow-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-yellow-700 mb-1">Needs Improvement</p>
+                    <p className="text-2xl font-bold text-yellow-900">
+                      {gradesData.summary.needs_improvement}
+                    </p>
+                  </div>
+                  <div className="bg-yellow-200 rounded-lg p-3">
+                    <Icon icon="solar:info-circle-bold" className="w-6 h-6 text-yellow-700" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <Icon icon="solar:loading-bold" className="w-8 h-8 text-emerald-600 animate-spin mx-auto mb-2" />
+                <p className="text-gray-600">Loading grades...</p>
+              </div>
+            </div>
+          ) : pagedGrades.length > 0 ? (
             <>
               <div className="overflow-hidden rounded-lg border border-gray-200">
                 <div className="hidden md:grid grid-cols-6 gap-4 bg-gray-50 px-4 py-3 text-xs font-medium text-gray-500">
@@ -272,7 +284,7 @@ export default function TeacherGradesPage() {
                           {grade.studentName}
                         </p>
                         <p className="text-xs text-gray-500 md:hidden">
-                          {grade.subject} • {grade.term}
+                          {grade.subject}
                         </p>
                       </div>
                       <div className="text-sm text-gray-700 hidden md:block">
@@ -291,20 +303,39 @@ export default function TeacherGradesPage() {
                         </p>
                       </div>
                       <div className="hidden md:block">
-                        <div className="flex items-center gap-2">
-                          <div className="w-full bg-gray-200 rounded-full h-1.5 max-w-[60px]">
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 bg-gray-200 rounded-full h-2.5 max-w-[80px] overflow-hidden">
                             <div
-                              className={`h-1.5 rounded-full ${
+                              className={`h-2.5 rounded-full transition-all ${
+                                grade.percentage >= 90
+                                  ? "bg-gradient-to-r from-green-500 to-green-600"
+                                  : grade.percentage >= 80
+                                  ? "bg-gradient-to-r from-blue-500 to-blue-600"
+                                  : "bg-gradient-to-r from-yellow-500 to-yellow-600"
+                              }`}
+                              style={{ width: `${Math.min(100, grade.percentage)}%` }}
+                            ></div>
+                          </div>
+                          <span className="text-sm font-semibold text-gray-900 min-w-[45px]">
+                            {grade.percentage}%
+                          </span>
+                        </div>
+                      </div>
+                      <div className="md:hidden">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 bg-gray-200 rounded-full h-2 overflow-hidden">
+                            <div
+                              className={`h-2 rounded-full ${
                                 grade.percentage >= 90
                                   ? "bg-green-500"
                                   : grade.percentage >= 80
                                   ? "bg-blue-500"
                                   : "bg-yellow-500"
                               }`}
-                              style={{ width: `${grade.percentage}%` }}
+                              style={{ width: `${Math.min(100, grade.percentage)}%` }}
                             ></div>
                           </div>
-                          <span className="text-sm text-gray-700">
+                          <span className="text-xs font-semibold text-gray-700">
                             {grade.percentage}%
                           </span>
                         </div>
@@ -330,13 +361,13 @@ export default function TeacherGradesPage() {
                 </div>
               </div>
 
-              {totalPages > 1 && (
-                <div className="mt-6 flex items-center justify-between flex-col sm:flex-row gap-4">
-                  <div className="text-sm text-gray-600">
-                    Showing {start + 1} to{" "}
-                    {Math.min(start + pageSize, filteredGrades.length)} of{" "}
-                    {filteredGrades.length} grades
-                  </div>
+              <div className="mt-6 flex items-center justify-between flex-col sm:flex-row gap-4">
+                <div className="text-sm text-gray-600">
+                  Showing {start + 1} to{" "}
+                  {Math.min(start + pageSize, filteredGrades.length)} of{" "}
+                  {filteredGrades.length} grades
+                </div>
+                {totalPages > 1 && (
                   <div className="flex gap-2">
                     <button
                       onClick={() => handlePageChange(page - 1)}
@@ -391,8 +422,8 @@ export default function TeacherGradesPage() {
                       Next
                     </button>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </>
           ) : (
             <div className="border border-dashed border-gray-300 rounded-lg p-8 text-center">

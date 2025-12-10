@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Icon } from "@iconify/react";
-import { createTeacherLesson, getSubjectsForSelect, getTopicsForSubject, SubjectOption, TopicOption } from "@/lib/api/teacher";
+import { createTeacherLesson, getSubjectsForSelect, getTeacherTopics, SubjectOption, TeacherTopic } from "@/lib/api/teacher";
 import { showErrorToast, showSuccessToast } from "@/lib/toast";
 
 const LESSON_TYPES = ["VIDEO", "AUDIO", "PDF", "PPT", "DOC"];
@@ -18,7 +18,8 @@ export default function CreateLessonModal({ isOpen, onClose, onSuccess }: Create
   const thumbnailInputRef = useRef<HTMLInputElement | null>(null);
 
   const [subjects, setSubjects] = useState<SubjectOption[]>([]);
-  const [topics, setTopics] = useState<TopicOption[]>([]);
+  const [allTopics, setAllTopics] = useState<TeacherTopic[]>([]);
+  const [topics, setTopics] = useState<TeacherTopic[]>([]);
   const [isLoadingSubjects, setIsLoadingSubjects] = useState(true);
   const [isLoadingTopics, setIsLoadingTopics] = useState(false);
 
@@ -42,17 +43,21 @@ export default function CreateLessonModal({ isOpen, onClose, onSuccess }: Create
   useEffect(() => {
     if (isOpen) {
       fetchSubjectsList();
+      fetchAllTopics();
     }
   }, [isOpen]);
 
   useEffect(() => {
-    if (subjectId) {
-      fetchTopicsForSubject(Number(subjectId));
+    if (subjectId && allTopics.length > 0) {
+      // Filter topics by selected subject
+      const filteredTopics = allTopics.filter(topic => topic.subject === Number(subjectId));
+      setTopics(filteredTopics);
+      setTopicId(""); // Reset topic selection when subject changes
     } else {
       setTopics([]);
       setTopicId("");
     }
-  }, [subjectId]);
+  }, [subjectId, allTopics]);
 
   useEffect(() => {
     return () => {
@@ -74,22 +79,15 @@ export default function CreateLessonModal({ isOpen, onClose, onSuccess }: Create
     }
   }
 
-  async function fetchTopicsForSubject(selectedSubject: number) {
+  async function fetchAllTopics() {
     try {
-      if (!selectedSubject) {
-        setTopics([]);
-        setTopicId("");
-        return;
-      }
       setIsLoadingTopics(true);
-      const data = await getTopicsForSubject(selectedSubject);
-      setTopics(data);
-      setTopicId("");
+      const data = await getTeacherTopics();
+      setAllTopics(data);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to load topics.";
       showErrorToast(message);
-      setTopics([]);
-      setTopicId("");
+      setAllTopics([]);
     } finally {
       setIsLoadingTopics(false);
     }
@@ -180,7 +178,7 @@ export default function CreateLessonModal({ isOpen, onClose, onSuccess }: Create
         title: title.trim(),
         description: description.trim(),
         type: lessonType,
-        status: "PENDING", // Status is PENDING when created, will be APPROVED when approved
+        status: "PENDING", // Status is PENDING when created, will be APPROVED when approved by validators
         resource: resourceFile,
         thumbnail: thumbnailFile || null,
         moderation_comment: "",
@@ -262,7 +260,7 @@ export default function CreateLessonModal({ isOpen, onClose, onSuccess }: Create
                   className="w-full h-11 rounded-lg border border-gray-300 px-3 text-gray-700 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:bg-gray-50"
                 >
                   <option value="">
-                    {!subjectId ? "Select a subject first" : isLoadingTopics ? "Loading topics..." : "Select topic"}
+                    {!subjectId ? "Select a subject first" : isLoadingTopics ? "Loading topics..." : topics.length === 0 ? "No topics available" : "Select topic"}
                   </option>
                   {topics.map((topic) => (
                     <option key={topic.id} value={topic.id}>

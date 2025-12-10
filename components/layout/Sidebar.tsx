@@ -24,6 +24,7 @@ const parentNavItems: NavItem[] = [
 const teacherNavItems: NavItem[] = [
   { href: "/dashboard/teacher", label: "Dashboard", icon: "solar:widget-5-bold" },
   { href: "/dashboard/teacher/class", label: "My Class", icon: "solar:users-group-two-rounded-bold" },
+  { href: "/dashboard/teacher/teachers", label: "Teachers", icon: "solar:user-bold" },
   { href: "/dashboard/teacher/subjects", label: "Subjects", icon: "solar:book-bold" },
   { href: "/dashboard/teacher/lessons", label: "Lessons", icon: "solar:book-bookmark-bold" },
   { href: "/dashboard/teacher/assignments", label: "Assignments", icon: "solar:document-add-bold" },
@@ -96,12 +97,15 @@ export default function Sidebar({ mobileOpen = false, onClose, userName = "Paren
           </ul>
 
           <div className="mt-auto p-3 space-y-3">
-            <div className="rounded-lg bg-white border border-gray-200 shadow-sm p-4">
+            <Link
+              href={isTeacher ? "/dashboard/teacher/profile" : "/dashboard/profile"}
+              className="rounded-lg bg-white border border-gray-200 shadow-sm p-4 hover:bg-gray-50 transition-colors cursor-pointer block"
+            >
               <div className="font-semibold text-gray-900 text-sm mb-2">{userName}</div>
               <div className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">
                 {userRole}
               </div>
-            </div>
+            </Link>
             <button 
               onClick={handleLogout}
               className="flex items-center justify-center gap-2 rounded-full bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700 w-[220px] h-[50px] mx-auto transition-colors"
@@ -144,12 +148,16 @@ export default function Sidebar({ mobileOpen = false, onClose, userName = "Paren
                 })}
               </ul>
               <div className="mt-auto p-3 space-y-3">
-                <div className="rounded-lg bg-white border border-gray-200 shadow-sm p-4">
+                <Link
+                  href={isTeacher ? "/dashboard/teacher/profile" : "/dashboard/profile"}
+                  onClick={onClose}
+                  className="rounded-lg bg-white border border-gray-200 shadow-sm p-4 hover:bg-gray-50 transition-colors cursor-pointer block"
+                >
                   <div className="font-semibold text-gray-900 text-sm mb-2">{userName}</div>
                   <div className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">
                     {userRole}
                   </div>
-                </div>
+                </Link>
                 <button 
                   onClick={handleLogout}
                   className="flex items-center justify-center gap-2 rounded-full bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700 w-[220px] h-[50px] mx-auto transition-colors"

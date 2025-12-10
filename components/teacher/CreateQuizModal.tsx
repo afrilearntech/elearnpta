@@ -5,13 +5,13 @@ import { Icon } from "@iconify/react";
 import { createLessonAssessment, getTeacherLessons, TeacherLesson } from "@/lib/api/teacher";
 import { showErrorToast, showSuccessToast } from "@/lib/toast";
 
-interface CreateAssignmentModalProps {
+interface CreateQuizModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export default function CreateAssignmentModal({ isOpen, onClose, onSuccess }: CreateAssignmentModalProps) {
+export default function CreateQuizModal({ isOpen, onClose, onSuccess }: CreateQuizModalProps) {
   const [lessons, setLessons] = useState<TeacherLesson[]>([]);
   const [isLoadingLessons, setIsLoadingLessons] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -96,7 +96,7 @@ export default function CreateAssignmentModal({ isOpen, onClose, onSuccess }: Cr
       // Don't send given_by - let the backend infer it from the authentication token
       await createLessonAssessment({
         lesson: Number(formData.lesson),
-        type: "ASSIGNMENT",
+        type: "QUIZ",
         title: formData.title.trim(),
         instructions: formData.instructions.trim(),
         marks: Number(formData.marks),
@@ -105,12 +105,12 @@ export default function CreateAssignmentModal({ isOpen, onClose, onSuccess }: Cr
         moderation_comment: "",
       });
 
-      showSuccessToast("Assignment created successfully!");
+      showSuccessToast("Quiz created successfully!");
       resetForm();
       onSuccess();
       onClose();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to create assignment.";
+      const message = error instanceof Error ? error.message : "Unable to create quiz.";
       showErrorToast(message);
     } finally {
       setIsSubmitting(false);
@@ -127,7 +127,7 @@ export default function CreateAssignmentModal({ isOpen, onClose, onSuccess }: Cr
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-gray-200">
         <div className="sticky top-0 bg-white border-b border-gray-200 p-6 z-10">
           <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-gray-900">Create Assignment</h2>
+            <h2 className="text-2xl font-bold text-gray-900">Create Quiz</h2>
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -169,15 +169,15 @@ export default function CreateAssignmentModal({ isOpen, onClose, onSuccess }: Cr
           {/* Title */}
           <div>
             <label className="block text-sm font-medium text-gray-800 mb-2">
-              Assignment Title<span className="text-red-600">*</span>
+              Quiz Title<span className="text-red-600">*</span>
             </label>
             <input
               type="text"
               name="title"
               value={formData.title}
               onChange={handleChange}
-              placeholder="e.g. Introduction to Algebra Assignment"
-              className={`w-full h-11 rounded-lg border px-4 text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 ${
+              placeholder="e.g. Introduction to Algebra Quiz"
+              className={`w-full h-11 rounded-lg border px-3 text-gray-900 bg-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 ${
                 errors.title ? "border-red-500" : "border-gray-300"
               }`}
             />
@@ -196,8 +196,8 @@ export default function CreateAssignmentModal({ isOpen, onClose, onSuccess }: Cr
               value={formData.instructions}
               onChange={handleChange}
               rows={4}
-              placeholder="Provide detailed instructions for the assignment..."
-              className={`w-full resize-y rounded-lg border p-4 text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 ${
+              placeholder="Provide clear instructions for the quiz..."
+              className={`w-full rounded-lg border px-3 py-2 text-gray-900 bg-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 ${
                 errors.instructions ? "border-red-500" : "border-gray-300"
               }`}
             />
@@ -206,61 +206,72 @@ export default function CreateAssignmentModal({ isOpen, onClose, onSuccess }: Cr
             )}
           </div>
 
-          {/* Marks and Due Date */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-800 mb-2">
-                Total Marks<span className="text-red-600">*</span>
-              </label>
-              <input
-                type="number"
-                name="marks"
-                value={formData.marks}
-                onChange={handleChange}
-                min="1"
-                placeholder="e.g. 100"
-                className={`w-full h-11 rounded-lg border px-4 text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 ${
-                  errors.marks ? "border-red-500" : "border-gray-300"
-                }`}
-              />
-              {errors.marks && (
-                <p className="mt-1 text-sm text-red-600">{errors.marks}</p>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-800 mb-2">
-                Due Date<span className="text-red-600">*</span>
-              </label>
-              <input
-                type="datetime-local"
-                name="due_at"
-                value={formData.due_at}
-                onChange={handleChange}
-                min={today}
-                className={`w-full h-11 rounded-lg border px-4 text-gray-700 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 ${
-                  errors.due_at ? "border-red-500" : "border-gray-300"
-                }`}
-              />
-              {errors.due_at && (
-                <p className="mt-1 text-sm text-red-600">{errors.due_at}</p>
-              )}
-            </div>
+          {/* Marks */}
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-2">
+              Total Marks<span className="text-red-600">*</span>
+            </label>
+            <input
+              type="number"
+              name="marks"
+              value={formData.marks}
+              onChange={handleChange}
+              placeholder="e.g. 100"
+              min="1"
+              className={`w-full h-11 rounded-lg border px-3 text-gray-900 bg-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 ${
+                errors.marks ? "border-red-500" : "border-gray-300"
+              }`}
+            />
+            {errors.marks && (
+              <p className="mt-1 text-sm text-red-600">{errors.marks}</p>
+            )}
           </div>
 
-          <div className="sticky bottom-0 bg-white border-t border-gray-200 pt-6 -mb-6 -mx-6 px-6 flex gap-3 justify-end">
+          {/* Due Date */}
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-2">
+              Due Date<span className="text-red-600">*</span>
+            </label>
+            <input
+              type="datetime-local"
+              name="due_at"
+              value={formData.due_at}
+              onChange={handleChange}
+              min={today}
+              className={`w-full h-11 rounded-lg border px-3 text-gray-900 bg-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 ${
+                errors.due_at ? "border-red-500" : "border-gray-300"
+              }`}
+            />
+            {errors.due_at && (
+              <p className="mt-1 text-sm text-red-600">{errors.due_at}</p>
+            )}
+          </div>
+
+          {/* Submit Button */}
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              {isSubmitting ? "Creating..." : "Create Assignment"}
+              {isSubmitting ? (
+                <>
+                  <Icon icon="solar:loading-bold" className="w-5 h-5 animate-spin" />
+                  <span>Creating...</span>
+                </>
+              ) : (
+                <>
+                  <Icon icon="solar:add-circle-bold" className="w-5 h-5" />
+                  <span>Create Quiz</span>
+                </>
+              )}
             </button>
           </div>
         </form>
