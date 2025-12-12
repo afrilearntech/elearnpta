@@ -29,7 +29,6 @@ interface Submission {
   status: "graded" | "pending-review";
   fileUrl?: string;
   solution?: string;
-  // Store original data for grading
   originalSubmission: {
     child_name: string;
     assessment_title: string;
