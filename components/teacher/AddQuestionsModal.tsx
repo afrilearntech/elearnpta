@@ -123,7 +123,11 @@ export default function AddQuestionsModal({
     setFormData((prev) => ({
       ...prev,
       type: newType,
-      options: newType === "MULTIPLE_CHOICE" ? ["", "", "", ""] : undefined,
+      options: 
+        newType === "MULTIPLE_CHOICE" ? ["", "", "", ""] :
+        newType === "TRUE_FALSE" ? ["True", "False"] :
+        newType === "FILL_IN_THE_BLANK" ? [] :
+        undefined,
     }));
   };
 
@@ -156,6 +160,22 @@ export default function AddQuestionsModal({
       if (formData.answer.toUpperCase() !== "TRUE" && formData.answer.toUpperCase() !== "FALSE") {
         newErrors.answer = "Answer must be 'True' or 'False'";
       }
+      // TRUE_FALSE questions require options - ensure they're set
+      if (!formData.options || formData.options.length < 2 || 
+          !formData.options.includes("True") || !formData.options.includes("False")) {
+        // Auto-fix: set options if missing
+        if (!formData.options || formData.options.length < 2) {
+          setFormData(prev => ({ ...prev, options: ["True", "False"] }));
+        }
+      }
+    }
+
+    if (formData.type === "FILL_IN_THE_BLANK") {
+      // FILL_IN_THE_BLANK requires options (possible answers/choices)
+      const validOptions = formData.options?.filter((opt) => opt.trim() !== "") || [];
+      if (validOptions.length === 0) {
+        newErrors.options = "At least one option is required for Fill in the Blank questions.";
+      }
     }
 
     setErrors(newErrors);
@@ -173,6 +193,19 @@ export default function AddQuestionsModal({
     setErrors({});
 
     try {
+      // Prepare options based on question type
+      let optionsToInclude: string[] | undefined = undefined;
+      if (formData.type === "MULTIPLE_CHOICE" && formData.options) {
+        optionsToInclude = formData.options.filter((opt) => opt.trim() !== "");
+      } else if (formData.type === "TRUE_FALSE") {
+        // Always include True/False options for TRUE_FALSE questions
+        optionsToInclude = formData.options && formData.options.length >= 2 
+          ? formData.options 
+          : ["True", "False"];
+      } else if (formData.type === "FILL_IN_THE_BLANK" && formData.options && formData.options.length > 0) {
+        optionsToInclude = formData.options.filter((opt) => opt.trim() !== "");
+      }
+
       const payload: CreateQuestionRequest = {
         ...(assessmentType === "general"
           ? { general_assessment_id: assessmentId }
@@ -180,9 +213,7 @@ export default function AddQuestionsModal({
         type: formData.type,
         question: formData.question.trim(),
         answer: formData.answer.trim(),
-        ...(formData.type === "MULTIPLE_CHOICE" && formData.options
-          ? { options: formData.options.filter((opt) => opt.trim() !== "") }
-          : {}),
+        ...(optionsToInclude ? { options: optionsToInclude } : {}),
       };
 
       await createQuestion(payload);
@@ -194,7 +225,11 @@ export default function AddQuestionsModal({
         type: formData.type, // Keep the same type
         question: "",
         answer: "",
-        options: formData.type === "MULTIPLE_CHOICE" ? ["", "", "", ""] : undefined,
+        options: 
+          formData.type === "MULTIPLE_CHOICE" ? ["", "", "", ""] :
+          formData.type === "TRUE_FALSE" ? ["True", "False"] :
+          formData.type === "FILL_IN_THE_BLANK" ? [] :
+          undefined,
         ...(assessmentType === "general"
           ? { general_assessment_id: assessmentId }
           : { lesson_assessment_id: assessmentId }),
@@ -390,12 +425,18 @@ export default function AddQuestionsModal({
                   )}
                 </div>
 
-                {/* Options (for Multiple Choice) */}
-                {formData.type === "MULTIPLE_CHOICE" && (
+                {/* Options (for Multiple Choice, True/False, Fill in the Blank) */}
+                {(formData.type === "MULTIPLE_CHOICE" || formData.type === "FILL_IN_THE_BLANK") && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Options <span className="text-red-500">*</span>
-                      <span className="text-xs text-gray-500 ml-2">(At least 2 required)</span>
+                      <span className="text-xs text-gray-500 ml-2">
+                        {formData.type === "MULTIPLE_CHOICE" 
+                          ? "(At least 2 required)" 
+                          : formData.type === "FILL_IN_THE_BLANK"
+                          ? "(Enter possible answers/choices)"
+                          : ""}
+                      </span>
                     </label>
                     <div className="space-y-2">
                       {formData.options?.map((option, index) => (
@@ -409,7 +450,7 @@ export default function AddQuestionsModal({
                             }`}
                             placeholder={`Option ${index + 1}`}
                           />
-                          {formData.options && formData.options.length > 2 && (
+                          {formData.options && formData.options.length > (formData.type === "MULTIPLE_CHOICE" ? 2 : 1) && (
                             <button
                               type="button"
                               onClick={() => removeOption(index)}
